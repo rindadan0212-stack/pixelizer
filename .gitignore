@@ -1,0 +1,7 @@
+# Playwright MCP の作業出力
+.playwright-mcp/
+
+# OS / エディタ
+Thumbs.db
+.DS_Store
+*.local
