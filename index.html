@@ -383,12 +383,20 @@
     background: var(--panel); border: 1px solid var(--border-soft);
     font-size: 18px; line-height: 1;
   }
-  /* 読み込んだ画像の控え。まだ何も無いうちは空の枠を見せない。 */
+  /* 読み込んだ画像の控え。まだ何も無いうちは空の枠を見せない。
+     「何を読んだか」が分かれば十分なので小さく持つ。ここを大きく取ると
+     その分だけ柱がスクロールする。 */
   #originalCanvas {
-    display: none; max-width: 100%; height: auto;
+    display: none; max-width: 100%; width: auto;
+    height: 110px; object-fit: contain; object-position: left;
     margin-top: 8px; border: 1px solid var(--border-soft);
   }
   #originalCanvas.loaded { display: block; }
+
+  /* 画像を読んだ後、見本は用済み。一度きりの入口をずっと置いておかない。
+     「まっさらから」は残す ── 読み込んだ後に気が変わることがある。 */
+  #app.has-image .sample-label,
+  #app.has-image .sample-row { display: none; }
 
   .size-group-label { font-size: 10px; color: var(--muted); margin: 8px 0 3px; letter-spacing: 0.08em; }
   .palette { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
@@ -602,7 +610,7 @@
       background: var(--bg-deep);
     }
     #colLeft  { width: 300px; }
-    #colRight { width: 264px; }
+    #colRight { width: var(--col-right, 264px); }
     .pane { background: var(--panel-soft); }
     #stagePane { flex: 1 1 auto; min-width: 0; background: var(--bg-deep); }
     #paneFrames { border-top: 1px solid var(--border-soft); }
@@ -628,7 +636,7 @@
   /* iPad の横向きあたり。3 列は保ちつつ、脇を細くして真ん中に幅を回す。 */
   @media (min-width: 900px) and (max-width: 1180px) {
     #colLeft  { width: 244px; }
-    #colRight { width: 216px; }
+    :root { --col-right: 216px; }
     #previewCanvas { --preview-box: 160px; }
     .pane { padding: 10px; }
     /* この幅だと 5 個並びが 2 段に折れる。字を詰めて 1 段に戻す。 */
@@ -641,6 +649,74 @@
   @media (max-height: 480px) and (max-width: 899px) {
     #panePreview { display: none; }
     :root { --dock-h: 50px; --palette-h: 42px; --appbar-h: 42px; }
+  }
+
+  /* ══ 使わない機能をまとめて消す ═══════════════════════════
+     コマ送りは「アニメを作る人」だけのもの。1 枚の絵を描く人には
+     空のタイムラインが常に見えているだけで、置いておく理由がない。 */
+  #app:not(.anim) #paneFrames,
+  #app:not(.anim) [data-open="frames"],
+  #app:not(.anim) #animExports { display: none !important; }
+
+  /* ══ まれにしか触らないものは畳む ═══════════════════════════
+     開いたときも柱がスクロールしない量に収めてある。 */
+  details.fold { margin-top: 10px; }
+  details.fold > summary {
+    list-style: none; cursor: pointer;
+    min-height: var(--tap); display: flex; align-items: center; gap: 7px;
+    font-family: var(--pixel); font-size: 11px;
+    color: var(--text-soft); letter-spacing: 0.08em;
+  }
+  details.fold > summary::-webkit-details-marker { display: none; }
+  details.fold > summary::before { content: '+'; color: var(--muted); font-size: 13px; width: 9px; }
+  details.fold[open] > summary::before { content: '−'; }
+
+  /* かたちの道具は畳んでおく。鉛筆・消し・スポイト・塗りが常態。 */
+  #dock:not(.shapes) [data-tool="line"],
+  #dock:not(.shapes) [data-tool="rect"],
+  #dock:not(.shapes) [data-tool="ellipse"],
+  #dock:not(.shapes) [data-tool="lasso"] { display: none; }
+  #shapeGroupBtn.on { color: var(--accent); }
+
+  /* ══ 段階: 準備 → 描く ═══════════════════════════════════
+     読み込みと変換は一度きりの段取りで、描くのが常態。
+     同じ面に並べると、二度と使わない板がずっと場所を取る。
+     スマホは板が下から出る仕組みなので、この出し分けは広い画面だけ。 */
+  @media (min-width: 900px) {
+    #app[data-phase="empty"] #colLeft,
+    #app[data-phase="empty"] #colRight { display: none; }
+    #app[data-phase="setup"] #colRight { display: none; }
+    /* 描いている間は左の柱ごと畳む。読み込みと変換はもう終わっている。 */
+    #app[data-phase="draw"] #colLeft { display: none; }
+    /* できあがりはキャンバスの隅に浮かせる。柱の場所は描く道具に回す。
+       スマホでずっとこうしていて問題が出ていない置き方。 */
+    #app[data-phase="draw"] #panePreview {
+      position: fixed; z-index: 30;
+      top: calc(var(--appbar-h) + 10px);
+      right: calc(var(--col-right, 264px) + 11px);
+      background: none; padding: 0;
+      align-items: flex-end;
+    }
+    #app[data-phase="draw"] #panePreview .pane-title { display: none; }
+    #app[data-phase="draw"] #previewCanvas { --preview-box: 132px; }
+    /* 柱はスクロールさせない量に収める。auto のままにしてあるのは、
+       畳み方を間違えたときに中身を黙って切り落とさないため（保険）。
+       溢れていないことは実測で確かめる。 */
+    /* 設定は列の中に居座らせず、押したときだけ浮かせる */
+    #paneMore {
+      display: none;
+      position: fixed; z-index: 300;
+      top: calc(var(--appbar-h) + 8px); right: 8px; width: 300px;
+      background: var(--panel);
+      border: 1px solid var(--border-soft);
+      box-shadow: 0 10px 34px rgba(0,0,0,0.55);
+    }
+    #paneMore.open { display: block; }
+    #paneMore .pane-close {
+      display: block; position: absolute; top: 6px; right: 6px;
+      width: 32px; min-height: 32px; padding: 0; margin: 0;
+      background: none; border: none; color: var(--muted); font-size: 18px;
+    }
   }
 </style>
 </head>
@@ -683,6 +759,16 @@
         <path d="M3 6.5V3h3.5M15 6.5V3h-3.5M3 11.5V15h3.5M15 11.5V15h-3.5"/>
       </svg>
     </button>
+    <!-- 準備（読み込む・変換する）へ戻る口。広い画面では柱ごと出し入れする。 -->
+    <button class="bar-btn desk-only" id="setupBtn" title="画像と変換の設定" aria-label="画像と変換の設定">
+      <svg width="18" height="18" viewBox="0 0 12 12" shape-rendering="crispEdges" fill="currentColor">
+        <rect x="0" y="1" width="12" height="1"/><rect x="0" y="10" width="12" height="1"/>
+        <rect x="0" y="2" width="1" height="8"/><rect x="11" y="2" width="1" height="8"/>
+        <rect x="3" y="4" width="2" height="2"/>
+        <rect x="2" y="8" width="8" height="1"/><rect x="3" y="7" width="6" height="1"/>
+        <rect x="5" y="6" width="3" height="1"/>
+      </svg>
+    </button>
     <!-- 数分に1回のもの = 1タップで届く場所。毎秒使うものは下の帯にある。 -->
     <button class="bar-btn sheet-only" data-open="frames" title="コマ" aria-label="コマ">
       <svg width="18" height="18" viewBox="0 0 12 12" shape-rendering="crispEdges" fill="currentColor">
@@ -696,7 +782,7 @@
         <rect x="1" y="9" width="10" height="2"/>
       </svg>
     </button>
-    <button class="bar-btn sheet-only" id="moreBtn" title="そのほか" aria-label="そのほか">
+    <button class="bar-btn" id="moreBtn" title="そのほか" aria-label="そのほか">
       <svg width="18" height="18" viewBox="0 0 12 12" shape-rendering="crispEdges" fill="currentColor">
         <rect x="0" y="5" width="2" height="2"/><rect x="5" y="5" width="2" height="2"/>
         <rect x="10" y="5" width="2" height="2"/>
@@ -708,17 +794,6 @@
 
     <!-- ── 左の列（スマホでは下から出る板になる） ───────────── -->
     <div id="colLeft">
-
-      <section class="pane" id="paneMore" data-pane="more">
-        <button class="pane-close" data-close aria-label="閉じる">×</button>
-        <div class="pane-title">そのほか</div>
-        <div class="stack">
-          <button data-open="image">画像を読み込む</button>
-          <button data-open="convert">サイズと変換の設定</button>
-          <button data-open="export">背景と書き出し</button>
-          <button id="aboutBtn2">このアプリについて</button>
-        </div>
-      </section>
 
       <section class="pane" id="paneImage" data-pane="image">
         <button class="pane-close" data-close aria-label="閉じる">×</button>
@@ -747,130 +822,71 @@
           <button data-w="32" data-h="32" class="active">32</button>
           <button data-w="64" data-h="64">64</button>
         </div>
-        <div class="size-group-label">たて長 9:16</div>
-        <div class="btn-grid-3">
-          <button data-w="36" data-h="64">36×64</button>
-          <button data-w="45" data-h="80">45×80</button>
-          <button data-w="72" data-h="128">72×128</button>
-        </div>
-        <div class="size-group-label">たて長 4:5</div>
-        <div class="btn-grid-3">
-          <button data-w="32" data-h="40">32×40</button>
-          <button data-w="48" data-h="60">48×60</button>
-          <button data-w="80" data-h="100">80×100</button>
-        </div>
-        <label class="check" style="margin-top:12px;">
-          <input type="checkbox" id="transparentBg"> 左上の色を透明にする
-        </label>
-        <label style="margin-top:4px;">
-          <span style="font-size:11px; color:var(--muted);">鮮やかさ <span id="satLabel">1.5</span>倍</span>
-          <input type="range" id="saturation" min="1" max="3" step="0.1" value="1.5">
-        </label>
-        <div class="size-group-label">決まったパレット</div>
-        <select id="palettePreset">
-          <option value="">— なし（画像から自動）—</option>
-          <option value="gb">ゲームボーイ（緑4色）</option>
-          <option value="gb-pocket">ゲームボーイポケット（灰4色）</option>
-          <option value="pico8">PICO-8（16色）</option>
-          <option value="cga">CGA モード4（4色）</option>
-          <option value="nes">ファミコン NTSC（32色）</option>
-          <option value="1bit">白黒 2色</option>
-          <option value="sepia">セピア（5階調）</option>
-        </select>
-        <div class="size-group-label">自動パレットの上限</div>
-        <select id="paletteLimit">
-          <option value="0">制限なし（フルカラー）</option>
-          <option value="64">64色</option>
-          <option value="32" selected>32色</option>
-          <option value="16">16色</option>
-          <option value="8">8色</option>
-          <option value="4">4色</option>
-        </select>
-        <label class="check" style="margin-top:8px;">
-          <input type="checkbox" id="dithering"> ベイヤー 4×4 の網かけ
-        </label>
-        <button class="primary" id="convertBtn" style="width:100%; margin-top:10px;" disabled>ドット絵にする</button>
-      </section>
-
-      <section class="pane" id="paneColor" data-pane="color">
-        <button class="pane-close" data-close aria-label="閉じる">×</button>
-        <div class="pane-title">色をつくる・描き方</div>
-        <div class="color-row">
-          <input type="color" id="colorPicker" value="#ff0000">
-          <span id="colorHex" style="font-family:monospace; font-size:13px;">#FF0000</span>
-        </div>
-        <div class="section">
-          <div class="section-title">四角・丸の描き方</div>
-          <div class="btn-row">
-            <button id="shapeOutlineBtn" class="active">枠だけ</button>
-            <button id="shapeFilledBtn">塗りつぶし</button>
-          </div>
-        </div>
-        <div class="section">
-          <div class="section-title">左右・上下対称に描く</div>
-          <div class="btn-row">
-            <button id="mirrorHBtn">左右</button>
-            <button id="mirrorVBtn">上下</button>
-          </div>
-        </div>
-        <div class="section">
-          <div class="section-title">投げ輪で選んだ範囲</div>
-          <div class="btn-grid">
-            <button id="selCopyBtn" disabled>コピー</button>
-            <button id="selCutBtn" disabled>切り取り</button>
-            <button id="selCommitBtn" disabled>確定</button>
-            <button id="selCancelBtn" disabled>解除</button>
-          </div>
-        </div>
-        <button id="deleteColorBtn" style="width:100%;" disabled>この色を全部消す</button>
-      </section>
-
-      <section class="pane" id="paneExport" data-pane="export">
-        <button class="pane-close" data-close aria-label="閉じる">×</button>
-        <div class="pane-title">背景と書き出し</div>
-        <div class="section">
-          <div class="section-title">編集中の背景（絵には残らない）</div>
+        <details class="fold" id="moreSizes">
+          <summary>たて長のサイズ</summary>
+          <div class="size-group-label">9:16</div>
           <div class="btn-grid-3">
-            <button data-bg="checker" class="active">透明</button>
-            <button data-bg="white">白</button>
-            <button data-bg="black">黒</button>
+            <button data-w="36" data-h="64">36×64</button>
+            <button data-w="45" data-h="80">45×80</button>
+            <button data-w="72" data-h="128">72×128</button>
           </div>
-        </div>
-        <div class="section">
-          <div class="section-title">名前</div>
-          <input type="text" id="spriteName" value="sprite">
-        </div>
-        <div class="section stack">
-          <button class="primary" id="downloadBtn" disabled>PNG で保存（今のコマ）</button>
-          <button id="shareBtn" disabled>他のアプリに送る</button>
-          <button id="sheetDownloadBtn" disabled>スプライトシート PNG</button>
-          <button id="folderDownloadBtn" disabled>コマごとに PNG 保存</button>
-        </div>
-        <div class="section">
-          <div class="section-title">動く GIF</div>
-          <div class="btn-row">
-            <label style="flex:1; margin:0;">
-              <span style="font-size:11px; color:var(--muted);">大きさ</span>
-              <select id="gifScale">
-                <option value="1">1×</option>
-                <option value="2">2×</option>
-                <option value="4" selected>4×</option>
-                <option value="8">8×</option>
-              </select>
-            </label>
-            <label style="flex:1; margin:0;">
-              <span style="font-size:11px; color:var(--muted);">速さ fps</span>
-              <select id="gifFps">
-                <option value="2">2</option>
-                <option value="4">4</option>
-                <option value="6" selected>6</option>
-                <option value="10">10</option>
-                <option value="15">15</option>
-              </select>
-            </label>
+          <div class="size-group-label">4:5</div>
+          <div class="btn-grid-3">
+            <button data-w="32" data-h="40">32×40</button>
+            <button data-w="48" data-h="60">48×60</button>
+            <button data-w="80" data-h="100">80×100</button>
           </div>
-          <button id="gifDownloadBtn" style="width:100%; margin-top:8px;" disabled>GIF を書き出す</button>
-        </div>
+        </details>
+        <div class="size-group-label">元の絵に合わせる</div>
+        <button id="autoSizeBtn" style="width:100%;" disabled>格子を見つけてサイズを決める</button>
+        <div id="autoSizeNote" style="font-size:11px; color:var(--muted); margin-top:6px;"></div>
+        <details class="fold">
+          <summary>色の決め方</summary>
+          <label class="check" style="margin-top:6px;">
+            <input type="checkbox" id="transparentBg"> 左上の色を透明にする
+          </label>
+          <label style="margin-top:4px;">
+            <span style="font-size:11px; color:var(--muted);">鮮やかさ <span id="satLabel">1.5</span>倍</span>
+            <input type="range" id="saturation" min="1" max="3" step="0.1" value="1.5">
+          </label>
+          <div class="size-group-label">決まったパレット</div>
+          <select id="palettePreset">
+            <option value="">— なし（画像から自動）—</option>
+            <option value="gb">ゲームボーイ（緑4色）</option>
+            <option value="gb-pocket">ゲームボーイポケット（灰4色）</option>
+            <option value="pico8">PICO-8（16色）</option>
+            <option value="cga">CGA モード4（4色）</option>
+            <option value="nes">ファミコン NTSC（32色）</option>
+            <option value="1bit">白黒 2色</option>
+            <option value="sepia">セピア（5階調）</option>
+          </select>
+          <div class="size-group-label">自動パレットの上限</div>
+          <select id="paletteLimit">
+            <option value="0">制限なし（フルカラー）</option>
+            <option value="64">64色</option>
+            <option value="32" selected>32色</option>
+            <option value="16">16色</option>
+            <option value="8">8色</option>
+            <option value="4">4色</option>
+          </select>
+          <label class="check" style="margin-top:8px;">
+            <input type="checkbox" id="dithering"> ベイヤー 4×4 の網かけ
+          </label>
+        </details>
+        <details class="fold">
+          <summary>締め方</summary>
+          <label class="check" style="margin-top:6px;">
+            <input type="checkbox" id="modeDownscale" checked> セルの最頻色で縮小する
+          </label>
+          <label class="check" style="margin-top:4px;">
+            <input type="checkbox" id="despeckleOpt" checked> 孤立した点を消す
+          </label>
+          <label style="margin-top:8px;">
+            <span style="font-size:11px; color:var(--muted);">輪郭を締める <span id="outlineLabel">なし</span></span>
+            <input type="range" id="outlineStrength" min="0" max="3" step="1" value="0">
+          </label>
+        </details>
+        <button class="primary" id="convertBtn" style="width:100%; margin-top:12px;" disabled>ドット絵にする</button>
       </section>
 
     </div>
@@ -916,6 +932,44 @@
         <div class="pane-title desk-only">できあがり</div>
         <canvas id="previewCanvas" class="bg-checker" title="押すと拡大"></canvas>
       </div>
+
+      <!-- 描いている間ずっと使うもの。準備の板とは別の柱に置く。 -->
+      <section class="pane" id="paneColor" data-pane="color">
+        <button class="pane-close" data-close aria-label="閉じる">×</button>
+        <div class="pane-title">色をつくる・描き方</div>
+        <div class="color-row">
+          <input type="color" id="colorPicker" value="#ff0000">
+          <span id="colorHex" style="font-family:monospace; font-size:13px;">#FF0000</span>
+        </div>
+        <div class="section" style="margin-top:12px;">
+          <div class="section-title">左右・上下対称に描く</div>
+          <div class="btn-row">
+            <button id="mirrorHBtn">左右</button>
+            <button id="mirrorVBtn">上下</button>
+          </div>
+        </div>
+        <details class="fold">
+          <summary>かたち・選んだ範囲</summary>
+          <div class="section" style="margin-top:6px;">
+            <div class="section-title">四角・丸の描き方</div>
+            <div class="btn-row">
+              <button id="shapeOutlineBtn" class="active">枠だけ</button>
+              <button id="shapeFilledBtn">塗りつぶし</button>
+            </div>
+          </div>
+          <div class="section">
+            <div class="section-title">投げ輪で選んだ範囲</div>
+            <div class="btn-grid">
+              <button id="selCopyBtn" disabled>コピー</button>
+              <button id="selCutBtn" disabled>切り取り</button>
+              <button id="selCommitBtn" disabled>確定</button>
+              <button id="selCancelBtn" disabled>解除</button>
+            </div>
+          </div>
+          <button id="deleteColorBtn" style="width:100%;" disabled>この色を全部消す</button>
+        </details>
+      </section>
+
       <section class="pane" id="paneFrames" data-pane="frames">
         <button class="pane-close" data-close aria-label="閉じる">×</button>
         <div class="pane-title">コマ</div>
@@ -954,6 +1008,61 @@
           <button id="layerDownBtn" disabled>▼</button>
         </div>
         <div id="layerList" class="layer-list"></div>
+      </section>
+
+      <section class="pane" id="paneExport" data-pane="export">
+        <button class="pane-close" data-close aria-label="閉じる">×</button>
+        <div class="pane-title">書き出し</div>
+        <div class="section stack">
+          <button class="primary" id="downloadBtn" disabled>PNG で保存<span id="downloadSuffix"></span></button>
+          <button id="shareBtn" disabled>他のアプリに送る</button>
+        </div>
+        <details class="fold">
+          <summary>名前と編集中の背景</summary>
+          <div class="section" style="margin-top:6px;">
+            <div class="section-title">名前</div>
+            <input type="text" id="spriteName" value="sprite">
+          </div>
+          <div class="section">
+            <div class="section-title">編集中の背景（絵には残らない）</div>
+            <div class="btn-grid-3">
+              <button data-bg="checker" class="active">透明</button>
+              <button data-bg="white">白</button>
+              <button data-bg="black">黒</button>
+            </div>
+          </div>
+        </details>
+        <div id="animExports">
+          <div class="section stack">
+            <button id="sheetDownloadBtn" disabled>スプライトシート PNG</button>
+            <button id="folderDownloadBtn" disabled>コマごとに PNG 保存</button>
+          </div>
+          <div class="section">
+            <div class="section-title">動く GIF</div>
+            <div class="btn-row">
+              <label style="flex:1; margin:0;">
+                <span style="font-size:11px; color:var(--muted);">大きさ</span>
+                <select id="gifScale">
+                  <option value="1">1×</option>
+                  <option value="2">2×</option>
+                  <option value="4" selected>4×</option>
+                  <option value="8">8×</option>
+                </select>
+              </label>
+              <label style="flex:1; margin:0;">
+                <span style="font-size:11px; color:var(--muted);">速さ fps</span>
+                <select id="gifFps">
+                  <option value="2">2</option>
+                  <option value="4">4</option>
+                  <option value="6" selected>6</option>
+                  <option value="10">10</option>
+                  <option value="15">15</option>
+                </select>
+              </label>
+            </div>
+            <button id="gifDownloadBtn" style="width:100%; margin-top:8px;" disabled>GIF を書き出す</button>
+          </div>
+        </div>
       </section>
     </div>
 
@@ -1010,6 +1119,17 @@
       </svg><span>塗り</span>
     </button>
     <span class="dock-sep"></span>
+    <!-- 線・四角・丸・投げ輪は毎秒使うものではない。1 つ畳んで奥に置く。 -->
+    <button class="tool-btn" id="shapeGroupBtn" aria-expanded="false" title="かたちの道具">
+      <svg width="16" height="16" viewBox="0 0 12 12" shape-rendering="crispEdges" fill="currentColor">
+        <rect x="0" y="1" width="6" height="1"/><rect x="0" y="6" width="6" height="1"/>
+        <rect x="0" y="2" width="1" height="4"/><rect x="5" y="2" width="1" height="4"/>
+        <rect x="8" y="5" width="2" height="1"/><rect x="8" y="11" width="2" height="1"/>
+        <rect x="7" y="6" width="1" height="1"/><rect x="10" y="6" width="1" height="1"/>
+        <rect x="6" y="7" width="1" height="3"/><rect x="11" y="7" width="1" height="3"/>
+        <rect x="7" y="10" width="1" height="1"/><rect x="10" y="10" width="1" height="1"/>
+      </svg><span>かたち</span>
+    </button>
     <button class="tool-btn" data-tool="line">
       <svg width="16" height="16" viewBox="0 0 12 12" shape-rendering="crispEdges" fill="currentColor">
         <rect x="1" y="9" width="2" height="2"/><rect x="3" y="7" width="2" height="2"/>
@@ -1043,6 +1163,29 @@
   </div>
 
 
+  <!-- 「そのほか」は柱の中に置かない。段階によって柱ごと消えるので、
+       中に居ると設定に手が届かなくなる。 -->
+  <section class="pane" id="paneMore" data-pane="more">
+    <button class="pane-close" data-close aria-label="閉じる">×</button>
+    <div class="pane-title">そのほか</div>
+    <div class="stack sheet-only">
+      <button data-open="image">画像を読み込む</button>
+      <button data-open="convert">サイズと変換の設定</button>
+      <button data-open="export">背景と書き出し</button>
+    </div>
+    <div class="section" style="margin-top:14px;">
+      <div class="section-title">使う機能</div>
+      <label class="check">
+        <input type="checkbox" id="animEnabled"> コマ送り（アニメ）を使う
+      </label>
+      <div style="font-size:11px; color:var(--muted); margin-top:2px; line-height:1.5;">
+        入れるとコマの一覧、GIF とスプライトシートの書き出しが出てくる。
+        1 枚の絵だけを描くなら要らない。
+      </div>
+    </div>
+    <button id="aboutBtn2" style="width:100%; margin-top:14px;">このアプリについて</button>
+  </section>
+
   <div id="sheetScrim"></div>
   <div id="toast" role="status" aria-live="polite"></div>
 </div>
@@ -1055,7 +1198,7 @@
       <dt>指での操作</dt>
       <dd>1本＝描く／2本＝つまんで拡大・移動／長押し＝その場の色を拾う</dd>
       <dt>できること</dt>
-      <dd>9種類のキャンバスサイズ、レイヤー、コマ送り、左右上下の対称描き、前のコマの薄い重ね表示、PNG・スプライトシート・GIF の書き出し</dd>
+      <dd>9種類のキャンバスサイズ、元の絵の格子に合わせる、レイヤー、左右上下の対称描き、PNG の書き出し。コマ送り（アニメ・GIF・スプライトシート）は「そのほか」で入れると出てきます。</dd>
       <dt>ホーム画面に入れる</dt>
       <dd>ブラウザの共有メニューから「ホーム画面に追加」。次からは全画面で、通信が無くても開けます。</dd>
     </dl>
@@ -1070,6 +1213,7 @@
 // ============ State ============
 const state = {
   sourceImg: null,
+  grid: null,          // 元画像から見つけた格子 {nx, ny, pxN, phxN, pyN, phyN, score}
   width: 32,           // ピクセル単位の横幅
   height: 32,          // ピクセル単位の縦幅
   pixels: null,        // Uint8ClampedArray, RGBA, length = width*height*4
@@ -1285,6 +1429,16 @@ const el = {
   paletteLimit: document.getElementById('paletteLimit'),
   palettePreset: document.getElementById('palettePreset'),
   dithering: document.getElementById('dithering'),
+  modeDownscale: document.getElementById('modeDownscale'),
+  despeckleOpt: document.getElementById('despeckleOpt'),
+  outlineStrength: document.getElementById('outlineStrength'),
+  outlineLabel: document.getElementById('outlineLabel'),
+  autoSizeBtn: document.getElementById('autoSizeBtn'),
+  autoSizeNote: document.getElementById('autoSizeNote'),
+  animEnabled: document.getElementById('animEnabled'),
+  setupBtn: document.getElementById('setupBtn'),
+  shapeGroupBtn: document.getElementById('shapeGroupBtn'),
+  downloadSuffix: document.getElementById('downloadSuffix'),
   sampleBtns: document.querySelectorAll('.sample-btn'),
   gifDownloadBtn: document.getElementById('gifDownloadBtn'),
   gifScale: document.getElementById('gifScale'),
@@ -1364,8 +1518,14 @@ function loadFile(file) {
     const img = new Image();
     img.onload = () => {
       state.sourceImg = img;
+      // 前の絵で見つけた格子は新しい絵には無関係
+      state.grid = null;
+      el.autoSizeNote.textContent = '';
       drawOriginal();
       el.convertBtn.disabled = false;
+      el.autoSizeBtn.disabled = false;
+      appEl.classList.add('has-image');
+      setPhase('setup');
     };
     img.src = e.target.result;
   };
@@ -1384,38 +1544,497 @@ function drawOriginal() {
 }
 
 // ============ Size selection ============
+function applyCanvasSize(w, h) {
+  state.width = w;
+  state.height = h;
+  el.sizeLabel.textContent = state.width;
+  el.sizeLabel2.textContent = state.height;
+  recomputeDisplay();
+  // 既に変換済みなら、新サイズで再描画 (バッファサイズが合わなくなるので再変換が必要)
+  // → 旧 pixels を破棄して空キャンバスにする (or 再変換を促す)
+  if (state.pixels) {
+    if (state.animPlaying) stopAnim();
+    // バッファサイズが変わる場合は変換ボタンを再度押す必要があると明示
+    state.pixels = null;
+    state.layers = [];
+    state.undoStack = [];
+    state.redoStack = [];
+    clearSavedWork();
+    cancelSelection();
+    updateHistoryButtons();
+    el.downloadBtn.disabled = true;
+    el.sheetDownloadBtn.disabled = true;
+    el.folderDownloadBtn.disabled = true;
+    el.frameAddBtn.disabled = true;
+    el.frameDupBtn.disabled = true;
+    el.deleteColorBtn.disabled = true;
+    renderTimeline();
+    renderLayerPanel();
+  }
+  renderEditor();
+}
+
 el.sizeButtons.forEach(b => {
   b.addEventListener('click', () => {
     el.sizeButtons.forEach(x => x.classList.remove('active'));
     b.classList.add('active');
-    state.width = parseInt(b.dataset.w);
-    state.height = parseInt(b.dataset.h);
-    el.sizeLabel.textContent = state.width;
-    el.sizeLabel2.textContent = state.height;
-    recomputeDisplay();
-    // 既に変換済みなら、新サイズで再描画 (バッファサイズが合わなくなるので再変換が必要)
-    // → 旧 pixels を破棄して空キャンバスにする (or 再変換を促す)
-    if (state.pixels) {
-      if (state.animPlaying) stopAnim();
-      // バッファサイズが変わる場合は変換ボタンを再度押す必要があると明示
-      state.pixels = null;
-      state.layers = [];
-      state.undoStack = [];
-      state.redoStack = [];
-      clearSavedWork();
-      cancelSelection();
-      updateHistoryButtons();
-      el.downloadBtn.disabled = true;
-      el.sheetDownloadBtn.disabled = true;
-      el.folderDownloadBtn.disabled = true;
-      el.frameAddBtn.disabled = true;
-      el.frameDupBtn.disabled = true;
-      el.deleteColorBtn.disabled = true;
-      renderTimeline();
-      renderLayerPanel();
-    }
-    renderEditor();
+    // 手で選んだサイズは検出した格子とは無関係。格子情報を捨てる。
+    state.grid = null;
+    el.autoSizeNote.textContent = '';
+    applyCanvasSize(parseInt(b.dataset.w), parseInt(b.dataset.h));
   });
+});
+
+// ============ Tightening ============
+// 絵がぼやける理由は「順番」にある。先に平均で縮めると、輪郭のセルに
+// 黒と地色の中間色が必ず生まれる。その中間色がパレットの枠を食うので、
+// 肝心の黒線が最も近い中間色に丸められて消える。
+// なので色は高解像度のまま決め、縮小はセルごとの多数決で行う。
+// 新しい色が 1 つも生まれないので、1 セル幅の輪郭がそのまま残る。
+
+// 作業バッファの長辺の上限。これ以上大きくしても 1 セルあたりの
+// 票数が増えるだけで結果は変わらず、メモリと時間だけ増える。
+const WORK_MAX = 1600;
+
+// 網かけの効き。OKLab で L が概ね [0,1]、a/b が ±0.3 程度なので、
+// それに対して軽く蹴る量。
+const DITHER_L = 0.08, DITHER_AB = 0.04;
+
+function buildWorkBuffer(img, sx, sy, sw, sh) {
+  const scale = Math.min(1, WORK_MAX / Math.max(sw, sh));
+  const w = Math.max(1, Math.round(sw * scale));
+  const h = Math.max(1, Math.round(sh * scale));
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const cx = c.getContext('2d', { willReadFrequently: true });
+  cx.imageSmoothingEnabled = true;
+  cx.imageSmoothingQuality = 'high';
+  cx.clearRect(0, 0, w, h);
+  cx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+  return cx.getImageData(0, 0, w, h);
+}
+
+// 出力セル i が読む範囲は [e[i], e[i+1])。格子を渡すと検出した格子線に
+// 合わせるので、1 つのセルが元のドット 2 つにまたがらない。
+function blockEdges(srcN, outN, grid) {
+  const e = new Int32Array(outN + 1);
+  for (let i = 0; i <= outN; i++) {
+    const v = grid ? Math.round(grid.ph + i * grid.p) : Math.round(i * srcN / outN);
+    e[i] = Math.max(0, Math.min(srcN, v));
+  }
+  for (let i = 1; i <= outN; i++) {
+    if (e[i] <= e[i-1]) e[i] = Math.min(srcN, e[i-1] + 1);
+  }
+  return e;
+}
+
+// 15bit RGB → パレット番号の早見表。32768 通りしかないので全部先に埋めてしまう。
+// これで 1 画素ごとの最近色探索が 1 回の配列参照になる。
+function buildPaletteLUT(paletteRGB) {
+  const pl = paletteRGB.map(c => rgbToOklab(c.r, c.g, c.b));
+  const lut = new Uint8Array(32768);
+  for (let k = 0; k < 32768; k++) {
+    const lab = rgbToOklab((((k >> 10) & 31) << 3) | 4, (((k >> 5) & 31) << 3) | 4, ((k & 31) << 3) | 4);
+    let best = 0, bd = Infinity;
+    for (let j = 0; j < pl.length; j++) {
+      const c = pl[j];
+      const dL = lab.L - c.L, dA = lab.A - c.A, dB = lab.B - c.B;
+      const d = dL*dL + dA*dA + dB*dB;
+      if (d < bd) { bd = d; best = j; }
+    }
+    lut[k] = best;
+  }
+  return lut;
+}
+
+// セルの半分以上が中身で埋まっていなければ描かない。これがシルエットに
+// 半透明のふちが生えるのを止めている。
+function covered(opq, total) { return opq > 0 && opq * 2 >= total; }
+
+function modeDownscaleIndexed(data, sw, ex, ey, paletteRGB, out) {
+  const lut = buildPaletteLUT(paletteRGB);
+  const n = paletteRGB.length;
+  const total = data.length >> 2;
+  const idx = new Uint8Array(total);
+  const opaque = new Uint8Array(total);
+  for (let p = 0, i = 0; p < total; p++, i += 4) {
+    if (data[i+3] < 128) continue;
+    opaque[p] = 1;
+    idx[p] = lut[((data[i] >> 3) << 10) | ((data[i+1] >> 3) << 5) | (data[i+2] >> 3)];
+  }
+  const hist = new Int32Array(n);
+  const W = ex.length - 1, H = ey.length - 1;
+  for (let oy = 0; oy < H; oy++) {
+    const y0 = ey[oy], y1 = ey[oy+1];
+    for (let ox = 0; ox < W; ox++) {
+      const x0 = ex[ox], x1 = ex[ox+1];
+      if (x1 <= x0 || y1 <= y0) continue;
+      hist.fill(0);
+      let cells = 0, opq = 0;
+      for (let y = y0; y < y1; y++) {
+        const row = y * sw;
+        for (let x = x0; x < x1; x++) {
+          cells++;
+          if (opaque[row + x]) { hist[idx[row + x]]++; opq++; }
+        }
+      }
+      if (!covered(opq, cells)) continue;
+      let best = 0, bc = -1;
+      for (let j = 0; j < n; j++) if (hist[j] > bc) { bc = hist[j]; best = j; }
+      const c = paletteRGB[best], o = (oy * W + ox) * 4;
+      out[o] = c.r; out[o+1] = c.g; out[o+2] = c.b; out[o+3] = 255;
+    }
+  }
+}
+
+// フルカラー時。15bit の粗い区画で多数決を取り、勝った区画の平均色を返す。
+// 生の RGB で数えると写真では全部 1 票になって多数決が成り立たない。
+function modeDownscaleTrueColor(data, sw, ex, ey, out) {
+  const W = ex.length - 1, H = ey.length - 1;
+  for (let oy = 0; oy < H; oy++) {
+    const y0 = ey[oy], y1 = ey[oy+1];
+    for (let ox = 0; ox < W; ox++) {
+      const x0 = ex[ox], x1 = ex[ox+1];
+      if (x1 <= x0 || y1 <= y0) continue;
+      const bins = new Map();
+      let cells = 0, opq = 0;
+      for (let y = y0; y < y1; y++) {
+        const row = y * sw;
+        for (let x = x0; x < x1; x++) {
+          cells++;
+          const i = (row + x) * 4;
+          if (data[i+3] < 128) continue;
+          opq++;
+          const k = ((data[i] >> 3) << 10) | ((data[i+1] >> 3) << 5) | (data[i+2] >> 3);
+          let bin = bins.get(k);
+          if (!bin) { bin = { n: 0, sr: 0, sg: 0, sb: 0 }; bins.set(k, bin); }
+          bin.n++; bin.sr += data[i]; bin.sg += data[i+1]; bin.sb += data[i+2];
+        }
+      }
+      if (!covered(opq, cells)) continue;
+      let win = null;
+      for (const bin of bins.values()) if (!win || bin.n > win.n) win = bin;
+      const o = (oy * W + ox) * 4;
+      out[o] = Math.round(win.sr / win.n);
+      out[o+1] = Math.round(win.sg / win.n);
+      out[o+2] = Math.round(win.sb / win.n);
+      out[o+3] = 255;
+    }
+  }
+}
+
+// 従来の平均縮小。網かけを使うときと「最頻色」を切ったときの経路。
+// 透明の混ざった縁で色が濁らないよう、アルファを掛けてから平均する。
+function averageDownscale(data, sw, ex, ey, paletteRGB, dither, out) {
+  const W = ex.length - 1, H = ey.length - 1;
+  const paletteLab = paletteRGB ? paletteRGB.map(c => rgbToOklab(c.r, c.g, c.b)) : null;
+  for (let oy = 0; oy < H; oy++) {
+    const y0 = ey[oy], y1 = ey[oy+1];
+    for (let ox = 0; ox < W; ox++) {
+      const x0 = ex[ox], x1 = ex[ox+1];
+      if (x1 <= x0 || y1 <= y0) continue;
+      let sr = 0, sg = 0, sb = 0, sa = 0, cells = 0;
+      for (let y = y0; y < y1; y++) {
+        const row = y * sw;
+        for (let x = x0; x < x1; x++) {
+          const i = (row + x) * 4;
+          const a = data[i+3] / 255;
+          sr += data[i] * a; sg += data[i+1] * a; sb += data[i+2] * a;
+          sa += a; cells++;
+        }
+      }
+      if (!covered(sa, cells)) continue;
+      let r = sr / sa, g = sg / sa, b = sb / sa;
+      if (paletteLab) {
+        const lab = rgbToOklab(r, g, b);
+        let L = lab.L, A = lab.A, B = lab.B;
+        if (dither) {
+          const t = BAYER_4X4[oy & 3][ox & 3];  // [-0.5, 0.5]
+          L += t * DITHER_L; A += t * DITHER_AB; B += t * DITHER_AB;
+        }
+        let best = 0, bd = Infinity;
+        for (let j = 0; j < paletteLab.length; j++) {
+          const c = paletteLab[j];
+          const dL = L - c.L, dA = A - c.A, dB = B - c.B;
+          const d = dL*dL + dA*dA + dB*dB;
+          if (d < bd) { bd = d; best = j; }
+        }
+        const c = paletteRGB[best];
+        r = c.r; g = c.g; b = c.b;
+      }
+      const o = (oy * W + ox) * 4;
+      out[o] = Math.round(r); out[o+1] = Math.round(g); out[o+2] = Math.round(b); out[o+3] = 255;
+    }
+  }
+}
+
+// 上下左右に同じ色が 1 つも無い点は多数決の取りこぼし。
+// 3 辺以上を占める色に渡してしまう。
+function despecklePixels(px, W, H) {
+  const out = new Uint8ClampedArray(px);
+  const nb = [];
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      if (px[i+3] === 0) continue;
+      nb.length = 0;
+      if (x > 0) nb.push(i - 4);
+      if (x < W-1) nb.push(i + 4);
+      if (y > 0) nb.push(i - W*4);
+      if (y < H-1) nb.push(i + W*4);
+      let solid = 0, same = 0;
+      for (const j of nb) {
+        if (px[j+3] === 0) continue;
+        solid++;
+        if (px[j] === px[i] && px[j+1] === px[i+1] && px[j+2] === px[i+2]) same++;
+      }
+      if (same > 0 || solid < 3) continue;
+      let winner = -1, wc = 0;
+      for (const j of nb) {
+        if (px[j+3] === 0) continue;
+        let c = 0;
+        for (const k of nb) {
+          if (px[k+3] === 0) continue;
+          if (px[k] === px[j] && px[k+1] === px[j+1] && px[k+2] === px[j+2]) c++;
+        }
+        if (c > wc) { wc = c; winner = j; }
+      }
+      if (wc >= 3) { out[i] = px[winner]; out[i+1] = px[winner+1]; out[i+2] = px[winner+2]; }
+    }
+  }
+  return out;
+}
+
+// シルエットの内側 1 周を暗くする。線の無い柔らかい絵は最頻色縮小だけでは
+// 締まらない ── 縁に落とす影が形を立たせる。
+// パレットが決まっているときは、そのパレットの中で「今より暗い色」に寄せる。
+// 勝手に色を増やすとゲームボーイや PICO-8 の約束を破ることになる。
+function tightenOutline(px, W, H, strength, paletteRGB) {
+  const amount = [0, 0.30, 0.50, 0.70][strength] || 0;
+  if (amount <= 0) return px;
+  const out = new Uint8ClampedArray(px);
+  const pal = paletteRGB ? paletteRGB.map(c => ({ rgb: c, lab: rgbToOklab(c.r, c.g, c.b) })) : null;
+  const solid = (x, y) => x >= 0 && x < W && y >= 0 && y < H && px[(y * W + x) * 4 + 3] !== 0;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      if (px[i+3] === 0) continue;
+      if (solid(x-1, y) && solid(x+1, y) && solid(x, y-1) && solid(x, y+1)) continue;
+      const lab = rgbToOklab(px[i], px[i+1], px[i+2]);
+      const tL = lab.L * (1 - amount);
+      const tA = lab.A * (1 - amount * 0.5);
+      const tB = lab.B * (1 - amount * 0.5);
+      if (pal) {
+        let best = null, bd = Infinity;
+        for (const p of pal) {
+          if (p.lab.L >= lab.L) continue;   // 今より暗い色にしか寄せない
+          const dL = tL - p.lab.L, dA = tA - p.lab.A, dB = tB - p.lab.B;
+          const d = dL*dL + dA*dA + dB*dB;
+          if (d < bd) { bd = d; best = p; }
+        }
+        if (!best) continue;
+        out[i] = best.rgb.r; out[i+1] = best.rgb.g; out[i+2] = best.rgb.b;
+      } else {
+        const c = oklabToRgb(tL, tA, tB);
+        out[i] = c.r; out[i+1] = c.g; out[i+2] = c.b;
+      }
+    }
+  }
+  return out;
+}
+
+// ============ Grid detection ============
+// 引き伸ばされたドット絵に隠れている格子の周期と位相を探す。
+// 本当に四角いセルで出来ている絵なら、列ごとの「隣との差の合計」が
+// 周期的に山を作る。その山にちょうど乗る櫛を探しているだけ。
+function edgeEnergy(imgData) {
+  const { width: W, height: H, data } = imgData;
+  const Ex = new Float64Array(Math.max(1, W - 1));
+  const Ey = new Float64Array(Math.max(1, H - 1));
+  const diff = (i, j) => {
+    const a1 = data[i+3] / 255, a0 = data[j+3] / 255;
+    return Math.abs(data[i]*a1 - data[j]*a0) + Math.abs(data[i+1]*a1 - data[j+1]*a0)
+         + Math.abs(data[i+2]*a1 - data[j+2]*a0) + Math.abs(data[i+3] - data[j+3]);
+  };
+  for (let y = 0; y < H; y++) {
+    const row = y * W * 4;
+    for (let x = 1; x < W; x++) Ex[x-1] += diff(row + x*4, row + (x-1)*4);
+  }
+  for (let y = 1; y < H; y++) {
+    const row = y * W * 4, prev = (y-1) * W * 4;
+    for (let x = 0; x < W; x++) Ey[y-1] += diff(row + x*4, prev + x*4);
+  }
+  return { Ex, Ey };
+}
+
+// 周期 p・位相 φ の櫛が山にどれだけ乗っているか。
+// 「櫛の上の平均」÷「櫛から外れた所の平均」なので、1 なら無関係、
+// 大きいほど本当に格子がある。
+function combScorer(E) {
+  const n = E.length;
+  const BIN = 0.25;
+  let tot = 0;
+  for (let i = 0; i < n; i++) tot += E[i];
+  return function score(p) {
+    const nb = Math.ceil(p / BIN);
+    const sum = new Float64Array(nb), cnt = new Float64Array(nb);
+    for (let i = 0; i < n; i++) {
+      const b = Math.min(nb - 1, Math.floor((i % p) / BIN));
+      sum[b] += E[i]; cnt[b]++;
+    }
+    let best = { period: p, phase: 0, score: 0 };
+    for (let b = 0; b < nb; b++) {
+      // 格子線は 1px 幅とは限らないので前後の桶も山とみなす
+      const b0 = (b - 1 + nb) % nb, b1 = (b + 1) % nb;
+      const on = sum[b] + sum[b0] + sum[b1];
+      const onc = cnt[b] + cnt[b0] + cnt[b1];
+      const offc = n - onc;
+      if (onc < 3 || offc < 3) continue;
+      const ratio = (on / onc) / Math.max(1e-9, (tot - on) / offc);
+      if (ratio > best.score) best = { period: p, phase: b * BIN, score: ratio };
+    }
+    return best;
+  };
+}
+
+// 周期 p の山に乗る櫛は 2p・3p でも乗ってしまうので、点数だけ見ると
+// 倍を掴むことがある (音の高さを聞き違えるのと同じ)。実測でも
+// 16.02 が 5.06、その倍の 32.05 が 5.15 とほぼ同点で倍側が勝った。
+// 半分・1/3 も同じくらい乗るなら、小さいほうが本物。
+const SUBHARMONIC_KEEP = 0.80;
+
+function bestComb(E) {
+  const none = { period: 0, phase: 0, score: 0 };
+  if (E.length < 24) return none;
+  const score = combScorer(E);
+  let best = none;
+  for (let p = 3; p <= 40; p += 0.05) {
+    const s = score(p);
+    if (s.score > best.score) best = s;
+  }
+  if (best.score <= 0) return none;
+  for (const k of [4, 3, 2]) {
+    const target = best.period / k;
+    if (target < 3) continue;
+    let cand = null;
+    for (let p = target - 0.15; p <= target + 0.151; p += 0.01) {
+      const s = score(p);
+      if (!cand || s.score > cand.score) cand = s;
+    }
+    if (cand && cand.score >= best.score * SUBHARMONIC_KEEP) return cand;
+  }
+  return best;
+}
+
+// 櫛の歯が「平均して」高いだけでは足りない。周期が長いほど歯の本数が
+// 減るので、たまたま強い列が数本あるだけで高得点が出てしまう
+// (実測: ただのグラデーションが 40px 周期で 2.85 を出した)。
+// 歯を 1 本ずつ見て、本当に大半が山に乗っているかを数える。
+function combConsistency(E, p, phase) {
+  const n = E.length;
+  let sum = 0;
+  for (let i = 0; i < n; i++) sum += E[i];
+  const mean = sum / n;
+  if (mean <= 0) return 0;
+  let teeth = 0, hit = 0;
+  for (let t = 0; ; t++) {
+    const pos = phase + t * p;
+    if (pos > n - 1) break;
+    const lo = Math.max(0, Math.round(pos - 0.5));
+    const hi = Math.min(n - 1, Math.round(pos + 0.5));
+    let m = 0;
+    for (let i = lo; i <= hi; i++) if (E[i] > m) m = E[i];
+    teeth++;
+    if (m > mean * 2) hit++;
+  }
+  return teeth ? hit / teeth : 0;
+}
+
+// 見つかったと言い切る下限。
+const GRID_MIN_SCORE = 2.0;
+const GRID_MIN_CONSISTENCY = 0.6;
+const GRID_MAX_CELLS = 256;
+
+// 周期をほぼ固定したまま、その近くだけ探し直す。位相は取り直す。
+function refineAround(score, period) {
+  let best = null;
+  for (let p = period - 0.3; p <= period + 0.301; p += 0.01) {
+    const s = score(p);
+    if (!best || s.score > best.score) best = s;
+  }
+  return best;
+}
+
+function detectGrid(img) {
+  const buf = buildWorkBuffer(img, 0, 0, img.width, img.height);
+  const { Ex, Ey } = edgeEnergy(buf);
+  const gx = bestComb(Ex), gy = bestComb(Ey);
+  if (gx.score < GRID_MIN_SCORE && gy.score < GRID_MIN_SCORE) return null;
+
+  // ドット絵のセルは四角い。縦横で線の量が違う絵では片方の軸しか出ない、
+  // あるいは片方だけ別の周期を掴むことがあるので、確からしい方の周期を
+  // もう片方にも当てて探し直す。実測でもこの絵は横 16.0 に対し
+  // 縦が単独では 39.5 を掴んでいた。
+  let X = gx, Y = gy;
+  const agree = gx.score >= GRID_MIN_SCORE && gy.score >= GRID_MIN_SCORE
+    && Math.abs(gx.period - gy.period) <= 0.15 * Math.max(gx.period, gy.period);
+  if (!agree) {
+    if (gx.score >= gy.score) Y = refineAround(combScorer(Ey), gx.period);
+    else X = refineAround(combScorer(Ex), gy.period);
+  }
+
+  const px = X.period, py = Y.period, phx = X.phase, phy = Y.phase;
+  const cx = combConsistency(Ex, px, phx), cy = combConsistency(Ey, py, phy);
+  if (Math.max(cx, cy) < GRID_MIN_CONSISTENCY) return null;
+
+  const nx = Math.round(buf.width / px), ny = Math.round(buf.height / py);
+  if (nx < 4 || ny < 4 || nx > GRID_MAX_CELLS || ny > GRID_MAX_CELLS) return null;
+  // 作業バッファの大きさに依存しない形 (画像の幅に対する割合) で持つ
+  return {
+    nx, ny,
+    pxN: px / buf.width, phxN: phx / buf.width,
+    pyN: py / buf.height, phyN: phy / buf.height,
+    score: Math.max(X.score, Y.score),
+  };
+}
+
+// 検出した格子は、キャンバスがその大きさのままのときだけ有効。
+function activeGrid() {
+  const g = state.grid;
+  if (!g || g.nx !== state.width || g.ny !== state.height) return null;
+  return g;
+}
+
+el.autoSizeBtn.addEventListener('click', () => {
+  if (!state.sourceImg) return;
+  el.autoSizeNote.textContent = '探しています…';
+  el.autoSizeBtn.disabled = true;
+  // 描画を 1 フレーム進めてから走らせる (そうしないと文字が出ないまま固まる)
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    let g = null;
+    try { g = detectGrid(state.sourceImg); } catch (e) { g = null; }
+    el.autoSizeBtn.disabled = false;
+    if (!g) {
+      state.grid = null;
+      el.autoSizeNote.textContent = '格子は見つかりませんでした。上のサイズから選んでください。';
+      return;
+    }
+    state.grid = g;
+    el.sizeButtons.forEach(x => x.classList.remove('active'));
+    el.autoSizeNote.textContent = `${g.nx}×${g.ny} で見つかりました（確からしさ ${g.score.toFixed(1)}）。`;
+    applyCanvasSize(g.nx, g.ny);
+  }));
+});
+
+el.outlineStrength.addEventListener('input', () => {
+  el.outlineLabel.textContent = ['なし', '弱', '中', '強'][parseInt(el.outlineStrength.value, 10) || 0];
+});
+// 網かけと最頻色は狙いが正反対なので、片方を立てたらもう片方を伏せる
+el.dithering.addEventListener('change', () => {
+  if (el.dithering.checked) el.modeDownscale.checked = false;
+});
+el.modeDownscale.addEventListener('change', () => {
+  if (el.modeDownscale.checked) el.dithering.checked = false;
 });
 
 // ============ Conversion ============
@@ -1423,27 +2042,29 @@ el.convertBtn.addEventListener('click', convert);
 
 function convert() {
   const W = state.width, H = state.height;
-  // 縦横比が異なる場合: 元画像を中央でクロップ後、W×H にスケール
+  const grid = activeGrid();
+
+  // 縦横比が異なる場合: 元画像を中央でクロップ。
+  // 格子スナップ中はキャンバスが元画像の比率そのものなのでクロップしない。
   const srcW = state.sourceImg.width, srcH = state.sourceImg.height;
-  const targetAspect = W / H, srcAspect = srcW / srcH;
   let sx = 0, sy = 0, sw = srcW, sh = srcH;
-  if (srcAspect > targetAspect) {
-    // 元画像が target より横長 → 横方向クロップ
-    sw = srcH * targetAspect;
-    sx = (srcW - sw) / 2;
-  } else if (srcAspect < targetAspect) {
-    // 元画像が target より縦長 → 縦方向クロップ
-    sh = srcW / targetAspect;
-    sy = (srcH - sh) / 2;
+  if (!grid) {
+    const targetAspect = W / H, srcAspect = srcW / srcH;
+    if (srcAspect > targetAspect) {
+      // 元画像が target より横長 → 横方向クロップ
+      sw = srcH * targetAspect;
+      sx = (srcW - sw) / 2;
+    } else if (srcAspect < targetAspect) {
+      // 元画像が target より縦長 → 縦方向クロップ
+      sh = srcW / targetAspect;
+      sy = (srcH - sh) / 2;
+    }
   }
-  const tmp = document.createElement('canvas');
-  tmp.width = W; tmp.height = H;
-  const tctx = tmp.getContext('2d');
-  tctx.imageSmoothingEnabled = true;
-  tctx.imageSmoothingQuality = 'high';
-  tctx.clearRect(0, 0, W, H);
-  tctx.drawImage(state.sourceImg, sx, sy, sw, sh, 0, 0, W, H);
-  const imgData = tctx.getImageData(0, 0, W, H);
+  // ⚠️ ここが以前と決定的に違う点。昔は先に W×H まで縮めていた。
+  // 平均縮小が輪郭に中間色を作り、その中間色がパレットの枠を食って
+  // 黒線そのものを追い出していた。色は必ず高解像度側で決める。
+  const imgData = buildWorkBuffer(state.sourceImg, sx, sy, sw, sh);
+  const workW = imgData.width, workH = imgData.height;
   const data = imgData.data;
 
   // Transparent bg from top-left color
@@ -1473,70 +2094,48 @@ function convert() {
   //   1. preset !== ""  → use PALETTE_PRESETS[preset] (fixed palette)
   //   2. limit  === 0    → keep full color (no quantization)
   //   3. otherwise        → k-means quantize to `limit` colors
-  // Dithering (Bayer 4×4) is applied during palette mapping when:
-  //   - a preset is used, OR
-  //   - limit > 0
-  // It does nothing when full-color is selected.
   const preset = el.palettePreset ? el.palettePreset.value : '';
   const limitN = parseInt(el.paletteLimit ? el.paletteLimit.value : '32', 10) || 0;
   const dither = el.dithering && el.dithering.checked;
   const swatchK = 32;
 
-  // Dither bias strength. Calibrated for OKLab where typical L spans ~[0,1]
-  // and a,b span roughly ±0.3 — so we want a small kick relative to that.
-  const DITHER_L = 0.08, DITHER_AB = 0.04;
-
-  let paletteRGB, paletteLab;
+  let paletteRGB;
   if (preset && PALETTE_PRESETS[preset]) {
     paletteRGB = PALETTE_PRESETS[preset];
   } else if (limitN > 0) {
     paletteRGB = quantize(data, limitN);
   } else {
-    // Full color: no remap. Still derive a swatch list for the side palette UI.
+    // Full color: no fixed palette. Still derive a swatch list for the side UI.
     paletteRGB = quantize(data, swatchK);
   }
   state.palette = paletteRGB;
+  const doMap = !!((preset && PALETTE_PRESETS[preset]) || limitN > 0);
 
-  const doMap = (preset && PALETTE_PRESETS[preset]) || limitN > 0;
-  if (doMap) {
-    paletteLab = paletteRGB.map(c => rgbToOklab(c.r, c.g, c.b));
-    for (let i = 0; i < data.length; i += 4) {
-      if (data[i+3] < 128) {
-        data[i] = 0; data[i+1] = 0; data[i+2] = 0; data[i+3] = 0;
-        continue;
-      }
-      const px = (i >> 2) % W;
-      const py = (i >> 2) / W | 0;
-      const lab = rgbToOklab(data[i], data[i+1], data[i+2]);
-      let L = lab.L, A = lab.A, B = lab.B;
-      if (dither) {
-        const t = BAYER_4X4[py & 3][px & 3];  // [-0.5, 0.5]
-        L += t * DITHER_L;
-        A += t * DITHER_AB;
-        B += t * DITHER_AB;
-      }
-      let best = 0, bd = Infinity;
-      for (let j = 0; j < paletteLab.length; j++) {
-        const c = paletteLab[j];
-        const dL = L - c.L, dA = A - c.A, dB = B - c.B;
-        const d = dL*dL + dA*dA + dB*dB;
-        if (d < bd) { bd = d; best = j; }
-      }
-      const c = paletteRGB[best];
-      data[i] = c.r; data[i+1] = c.g; data[i+2] = c.b; data[i+3] = 255;
-    }
+  // 網かけは「無い色を目の錯覚で作る」道具、最頻色は「色を増やさない」道具で、
+  // 狙いが正反対。同時に立てても意味がないので網かけを優先する。
+  const useMode = el.modeDownscale && el.modeDownscale.checked && !dither;
+
+  const ex = blockEdges(workW, W, grid ? { p: grid.pxN * workW, ph: grid.phxN * workW } : null);
+  const ey = blockEdges(workH, H, grid ? { p: grid.pyN * workH, ph: grid.phyN * workH } : null);
+
+  let pixels = new Uint8ClampedArray(W * H * 4);
+  if (useMode && doMap) {
+    modeDownscaleIndexed(data, workW, ex, ey, paletteRGB, pixels);
+  } else if (useMode) {
+    modeDownscaleTrueColor(data, workW, ex, ey, pixels);
   } else {
-    // Full color: just clean up alpha edges.
-    for (let i = 0; i < data.length; i += 4) {
-      if (data[i+3] < 128) {
-        data[i] = 0; data[i+1] = 0; data[i+2] = 0; data[i+3] = 0;
-      } else {
-        data[i+3] = 255;
-      }
-    }
+    averageDownscale(data, workW, ex, ey, doMap ? paletteRGB : null, dither, pixels);
   }
 
-  state.pixels = new Uint8ClampedArray(data);
+  if (el.despeckleOpt && el.despeckleOpt.checked) {
+    pixels = despecklePixels(pixels, W, H);
+  }
+  const outline = el.outlineStrength ? (parseInt(el.outlineStrength.value, 10) || 0) : 0;
+  if (outline > 0) {
+    pixels = tightenOutline(pixels, W, H, outline, doMap ? paletteRGB : null);
+  }
+
+  state.pixels = pixels;
   // 変換ごとに layers/frames を初期化。最初のレイヤー×フレームは新しい pixels。
   state.layers = [{
     name: 'Layer 1',
@@ -1556,6 +2155,7 @@ function convert() {
   renderTimeline();
   renderLayerPanel();
   renderEditor();
+  setPhase('draw');
 }
 
 // 絵が入った時に開ける道具を、一度に開ける。変換・新規・復元の 3 つから呼ぶ。
@@ -1598,6 +2198,7 @@ function startBlankCanvas() {
   renderLayerPanel();
   renderEditor();
   updateFrameButtons();
+  setPhase('draw');
 }
 el.blankCanvasBtn.addEventListener('click', startBlankCanvas);
 
@@ -3415,8 +4016,13 @@ function loadSample(key) {
     // A <canvas> works directly as a CanvasImageSource for drawImage,
     // so we can stash it as state.sourceImg unchanged.
     state.sourceImg = c;
+    state.grid = null;
+    el.autoSizeNote.textContent = '';
     drawOriginal();
     el.convertBtn.disabled = false;
+    el.autoSizeBtn.disabled = false;
+    appEl.classList.add('has-image');
+    setPhase('setup');
     URL.revokeObjectURL(url);
   };
   svgImg.onerror = () => {
@@ -3739,6 +4345,7 @@ async function restoreWork() {
     el.sizeLabel2.textContent = state.height;
     el.sizeButtons.forEach(b => b.classList.toggle('active',
       +b.dataset.w === state.width && +b.dataset.h === state.height));
+    syncSizeFold();
 
     state.layers = [];
     for (const l of data.layers) {
@@ -3763,6 +4370,10 @@ async function restoreWork() {
     return false;
   }
   _restoring = false;
+  // コマが 2 つ以上ある絵を復元したのにコマ送りが切られていると、
+  // 描いたものが見えないまま取り残される。そのときだけ勝手に入れる。
+  if (frameCount() > 1) applyAnimEnabled(true);
+  setPhase('draw');
   toast('前回の続きから開きました');
   return true;
 }
@@ -3799,7 +4410,9 @@ function closePane() {
   if (sheetScrim) sheetScrim.classList.remove('on');
 }
 function showPane(name) {
-  if (!isSheetMode()) return;
+  // 「そのほか」だけは広い画面でも板として浮かせる。
+  // ほかの板は列に常設なので、広い画面では開く相手がいない。
+  if (!isSheetMode() && name !== 'more') return;
   if (openPane === name) { closePane(); return; }
   closePane();
   const p = panes[name];
@@ -3821,6 +4434,74 @@ window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePane();
 // 画面が広がったら板の開閉状態を捨てる (列表示に戻るため)
 window.matchMedia('(max-width: 899px)').addEventListener('change', closePane);
 
+// ══ 段階（何も無い → 準備 → 描く）════════════════════════
+// 読み込みと変換は一度きりの段取りで、描くのが常態。
+// 同じ面に並べておくと、二度と使わない板がずっと場所を取る。
+const appEl = document.getElementById('app');
+
+function currentPhase() { return appEl.dataset.phase || 'empty'; }
+
+// たて長のサイズを選んでいるなら、その畳みは開けておく。
+// 「今どれが選ばれているか」が畳みの内側に隠れると迷子になる。
+function syncSizeFold() {
+  const more = document.getElementById('moreSizes');
+  if (more && more.querySelector('[data-w].active')) more.open = true;
+}
+
+function setPhase(name) {
+  appEl.dataset.phase = name;
+  el.setupBtn.classList.toggle('open', name === 'setup');
+  el.setupBtn.disabled = (name === 'empty');
+  // 柱の幅が変わる = キャンバスの器の大きさが変わる。
+  // レイアウトが確定してから倍率を計算し直す。
+  requestAnimationFrame(() => { recomputeDisplay(); renderEditor(); });
+}
+
+el.setupBtn.addEventListener('click', () => {
+  if (currentPhase() === 'setup') setPhase(state.pixels ? 'draw' : 'empty');
+  else setPhase('setup');
+});
+
+// ══ 使う機能（コマ送り）═══════════════════════════════════
+// 1 枚の絵しか描かない人に、空のタイムラインを見せ続ける理由がない。
+const ANIM_KEY = 'pixelizer.anim';
+
+function applyAnimEnabled(on) {
+  appEl.classList.toggle('anim', on);
+  el.animEnabled.checked = on;
+  el.downloadSuffix.textContent = on ? '（今のコマ）' : '';
+  if (!on && state.animPlaying) stopAnim();
+  try { localStorage.setItem(ANIM_KEY, on ? '1' : '0'); } catch (e) {}
+}
+
+el.animEnabled.addEventListener('change', () => applyAnimEnabled(el.animEnabled.checked));
+
+function readAnimPref() {
+  try { return localStorage.getItem(ANIM_KEY) === '1'; } catch (e) { return false; }
+}
+
+// ══ かたちの道具の開閉 ═══════════════════════════════════
+const dockEl = document.getElementById('dock');
+const SHAPE_TOOLS = ['line', 'rect', 'ellipse', 'lasso'];
+
+function setShapesOpen(on) {
+  dockEl.classList.toggle('shapes', on);
+  el.shapeGroupBtn.classList.toggle('on', on);
+  el.shapeGroupBtn.setAttribute('aria-expanded', on ? 'true' : 'false');
+}
+el.shapeGroupBtn.addEventListener('click', () => {
+  setShapesOpen(!dockEl.classList.contains('shapes'));
+});
+// かたちの道具を選んでいる間は畳まない (選択中の道具が消えてしまう)
+document.querySelectorAll('#dock [data-tool]').forEach(b => {
+  b.addEventListener('click', () => {
+    if (!SHAPE_TOOLS.includes(b.dataset.tool)) setShapesOpen(false);
+  });
+});
+
+applyAnimEnabled(readAnimPref());
+setPhase('empty');
+
 // ── 現在色（色の帯の左端）。押すと色をつくる板が出る ────────
 document.getElementById('currentColorBtn').addEventListener('click', () => {
   if (isSheetMode()) showPane('color');
@@ -3828,7 +4509,12 @@ document.getElementById('currentColorBtn').addEventListener('click', () => {
 });
 
 // ── 何も無いときの二択 ─────────────────────────────────
-document.getElementById('startDrawBtn').addEventListener('click', () => el.blankCanvasBtn.click());
+// 「ゼロから描く」はまず大きさを決めてもらう。後から変えると絵が消えるので、
+// いきなり既定の 32×32 で始めさせない。
+document.getElementById('startDrawBtn').addEventListener('click', () => {
+  setPhase('setup');
+  if (isSheetMode()) showPane('convert');
+});
 document.getElementById('startImageBtn').addEventListener('click', () => el.fileInput.click());
 
 // 画像を選んだら、次にすることが見えるように「変換」の板を開く（見本も同じ）

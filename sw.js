@@ -7,7 +7,7 @@
 //   外部 (フォント) … 取れたら入れておく。取れなければ黙って諦める。
 //
 // 中身を変えたら CACHE の版を上げる。古い版は activate で捨てる。
-const CACHE = 'pixelizer-v2';
+const CACHE = 'pixelizer-v4';
 const SHELL = [
   './',
   './index.html',
