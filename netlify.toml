@@ -4,9 +4,11 @@
 [[headers]]
   for = "/*"
   [headers.values]
-    X-Frame-Options = "DENY"
+    # ⚠️ X-Frame-Options = "DENY" は itch.io の埋め込みまで塞ぐ。
+    # frame-ancestors なら「自分と itch.io だけ許す」と書ける (こちらが優先)。
+    Content-Security-Policy = "frame-ancestors 'self' https://itch.io https://*.itch.io https://html.itch.zone"
     X-Content-Type-Options = "nosniff"
-    Referrer-Policy = "strict-origin-when-cross-origin"
+    Referrer-Policy = "no-referrer"
     Permissions-Policy = "interest-cohort=()"
 
 [[headers]]

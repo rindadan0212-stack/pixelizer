@@ -7,7 +7,7 @@
 //   外部 (フォント) … 取れたら入れておく。取れなければ黙って諦める。
 //
 // 中身を変えたら CACHE の版を上げる。古い版は activate で捨てる。
-const CACHE = 'pixelizer-v4';
+const CACHE = 'pixelizer-v7';
 const SHELL = [
   './',
   './index.html',
@@ -16,6 +16,7 @@ const SHELL = [
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png',
+  './icon-maskable-512.png',
   './apple-touch-icon-180.png',
 ];
 

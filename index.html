@@ -19,9 +19,9 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%231a1614'/%3E%3Crect x='3' y='3' width='4' height='4' fill='%23d4a85c'/%3E%3Crect x='9' y='3' width='4' height='4' fill='%23a78bd9'/%3E%3Crect x='3' y='9' width='4' height='4' fill='%23ebe3d8'/%3E%3Crect x='9' y='9' width='4' height='4' fill='%23d4a85c'/%3E%3C/svg%3E">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-180.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
+<!-- 外部への接続は 1 本も張らない。「追跡なし」と書いてある以上、
+     Web フォントの取得だけは例外、という扱いにはしない。
+     端末に入っていれば下の font-family でそのまま使われる。 -->
 <script src="gif.js" defer></script>
 <script id="gifWorkerSrc" type="javascript/worker">
 // gif.worker.js 0.2.0 - https://github.com/jnordberg/gif.js
@@ -488,6 +488,7 @@
   .gif-progress-bar-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.2s; }
   .gif-progress-pct { font-size: 11px; color: var(--muted); margin-top: 8px; font-family: monospace; }
 
+  .gif-progress-hint { font-size: 11px; color: var(--muted); margin-top: 10px; }
   .preview-modal {
     position: fixed; inset: 0; z-index: 1000;
     background: rgba(0, 0, 0, 0.9);
@@ -524,6 +525,35 @@
   #aboutSheet dl { margin: 0 0 16px; }
   #aboutSheet dt { color: var(--text); font-weight: 600; margin-top: 10px; }
   #aboutSheet dd { margin: 2px 0 0; color: var(--muted); }
+
+  /* コツの板。器は「このアプリについて」と同じで、中身が長いぶん広く取る。 */
+  #tipsSheet {
+    position: fixed; inset: 0; z-index: 900;
+    background: rgba(0,0,0,0.78);
+    display: none; align-items: center; justify-content: center; padding: 20px;
+  }
+  #tipsSheet.open { display: flex; }
+  #tipsSheet .box {
+    background: var(--panel); border: 1px solid var(--border);
+    padding: 24px; max-width: 560px; max-height: 84svh; overflow-y: auto;
+    scrollbar-gutter: stable;
+    line-height: 1.85; color: var(--text-soft); font-size: 12px;
+  }
+  #tipsSheet h2 {
+    font-family: var(--pixel); color: var(--accent); font-size: 14px;
+    margin: 0 0 6px; font-weight: normal; letter-spacing: 0.08em;
+  }
+  #tipsSheet h3 {
+    font-family: var(--pixel); color: var(--text); font-size: 12px;
+    margin: 22px 0 6px; font-weight: normal; letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--border-soft); padding-bottom: 5px;
+  }
+  #tipsSheet ul { margin: 0; padding-left: 17px; }
+  #tipsSheet li { margin: 8px 0; }
+  #tipsSheet li b { color: var(--text); font-weight: 600; }
+  #tipsSheet .why { color: var(--muted); }
+  #tipsSheet .src { color: var(--muted); font-size: 11px; margin-top: 20px; line-height: 1.7; }
+  #tipsSheet .src a { color: var(--accent-soft); }
 
   /* トースト（保存した／取り消した など、消える通知） */
   #toast {
@@ -594,7 +624,7 @@
   /* ══════════════════════════════════════════════════════
      デスクトップ（900px〜）: 左に設定、真ん中にキャンバス、右に層。
      ══════════════════════════════════════════════════════ */
-  .sheet-only { display: inline-flex; }
+  .sheet-only:not(.stack) { display: inline-flex; }
   @media (min-width: 900px) {
     .sheet-only { display: none !important; }
     #paneMore { display: none; }
@@ -678,6 +708,14 @@
   #dock:not(.shapes) [data-tool="lasso"] { display: none; }
   #shapeGroupBtn.on { color: var(--accent); }
 
+  /* 明暗チェック。色があると明度が足りているか判断できないので、
+     色を抜いて見る。見え方だけの切り替えで、絵は変わらない。 */
+  #app.value-check #editorCanvas,
+  #app.value-check #previewCanvas,
+  #app.value-check ~ .preview-modal canvas,
+  body.value-check .preview-modal canvas { filter: grayscale(1); }
+  #valueCheckBtn.on { color: var(--accent); background: var(--border-soft); }
+
   /* ══ 段階: 準備 → 描く ═══════════════════════════════════
      読み込みと変換は一度きりの段取りで、描くのが常態。
      同じ面に並べると、二度と使わない板がずっと場所を取る。
@@ -696,6 +734,9 @@
       right: calc(var(--col-right, 264px) + 11px);
       background: none; padding: 0;
       align-items: flex-end;
+      /* ⚠️ キャンバスの上に重なるので、触れるままだと拡大したとき
+         この 132px の角が鉛筆の効かない死に地になる。見るだけにする。 */
+      pointer-events: none;
     }
     #app[data-phase="draw"] #panePreview .pane-title { display: none; }
     #app[data-phase="draw"] #previewCanvas { --preview-box: 132px; }
@@ -757,6 +798,21 @@
     <button class="bar-btn" id="zoomResetBtn" title="画面に合わせる" aria-label="画面に合わせる">
       <svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6">
         <path d="M3 6.5V3h3.5M15 6.5V3h-3.5M3 11.5V15h3.5M15 11.5V15h-3.5"/>
+      </svg>
+    </button>
+    <!-- 見え方の切り替え。倍率や画面合わせと同じ仲間なのでここに置く。 -->
+    <button class="bar-btn" id="valueCheckBtn" title="明暗だけで見る" aria-label="明暗だけで見る" aria-pressed="false">
+      <svg width="17" height="17" viewBox="0 0 12 12" shape-rendering="crispEdges" fill="currentColor">
+        <rect x="4" y="0" width="4" height="1"/>
+        <rect x="2" y="1" width="2" height="1"/><rect x="8" y="1" width="2" height="1"/>
+        <rect x="1" y="2" width="1" height="2"/><rect x="10" y="2" width="1" height="2"/>
+        <rect x="0" y="4" width="1" height="4"/><rect x="11" y="4" width="1" height="4"/>
+        <rect x="1" y="8" width="1" height="2"/><rect x="10" y="8" width="1" height="2"/>
+        <rect x="2" y="10" width="2" height="1"/><rect x="8" y="10" width="2" height="1"/>
+        <rect x="4" y="11" width="4" height="1"/>
+        <rect x="6" y="1" width="3" height="1"/><rect x="6" y="2" width="4" height="2"/>
+        <rect x="6" y="4" width="5" height="4"/><rect x="6" y="8" width="4" height="2"/>
+        <rect x="6" y="10" width="3" height="1"/>
       </svg>
     </button>
     <!-- 準備（読み込む・変換する）へ戻る口。広い画面では柱ごと出し入れする。 -->
@@ -885,6 +941,16 @@
             <span style="font-size:11px; color:var(--muted);">輪郭を締める <span id="outlineLabel">なし</span></span>
             <input type="range" id="outlineStrength" min="0" max="3" step="1" value="0">
           </label>
+          <label class="check" style="margin-top:6px;">
+            <input type="checkbox" id="seloutEnabled"> 光が当たる側は明るくする
+          </label>
+          <div class="size-group-label">光の向き</div>
+          <div class="btn-grid-3" style="grid-template-columns:repeat(4,1fr);">
+            <button data-light="-1,-1" class="active">左上</button>
+            <button data-light="1,-1">右上</button>
+            <button data-light="-1,1">左下</button>
+            <button data-light="1,1">右下</button>
+          </div>
         </details>
         <button class="primary" id="convertBtn" style="width:100%; margin-top:12px;" disabled>ドット絵にする</button>
       </section>
@@ -940,12 +1006,16 @@
         <div class="color-row">
           <input type="color" id="colorPicker" value="#ff0000">
           <span id="colorHex" style="font-family:monospace; font-size:13px;">#FF0000</span>
+          <button id="rampBtn" style="margin-left:auto; padding:0 11px;"
+                  title="この色から明暗 5 段をつくって色見本に足す">階調</button>
         </div>
         <div class="section" style="margin-top:12px;">
-          <div class="section-title">左右・上下対称に描く</div>
+          <div class="section-title">描き方</div>
           <div class="btn-row">
             <button id="mirrorHBtn">左右</button>
             <button id="mirrorVBtn">上下</button>
+            <button id="pixelPerfectBtn"
+                    title="曲がり角にできる余分な点を消して、線を 1px に保つ">かど消し</button>
           </div>
         </div>
         <details class="fold">
@@ -1013,6 +1083,17 @@
       <section class="pane" id="paneExport" data-pane="export">
         <button class="pane-close" data-close aria-label="閉じる">×</button>
         <div class="pane-title">書き出し</div>
+        <div class="section">
+          <div class="section-title">保存する大きさ</div>
+          <select id="exportScale">
+            <option value="1">1× そのまま</option>
+            <option value="2">2×</option>
+            <option value="4">4×</option>
+            <option value="8" selected>8×</option>
+            <option value="16">16×</option>
+          </select>
+          <div id="exportSizeNote" style="font-size:11px; color:var(--muted); margin-top:5px;"></div>
+        </div>
         <div class="section stack">
           <button class="primary" id="downloadBtn" disabled>PNG で保存<span id="downloadSuffix"></span></button>
           <button id="shareBtn" disabled>他のアプリに送る</button>
@@ -1183,11 +1264,108 @@
         1 枚の絵だけを描くなら要らない。
       </div>
     </div>
-    <button id="aboutBtn2" style="width:100%; margin-top:14px;">このアプリについて</button>
+    <button id="tipsBtn" style="width:100%; margin-top:14px;">ドット絵のコツ</button>
+    <button id="aboutBtn2" style="width:100%; margin-top:6px;">このアプリについて</button>
   </section>
 
   <div id="sheetScrim"></div>
   <div id="toast" role="status" aria-live="polite"></div>
+</div>
+
+<div id="tipsSheet">
+  <div class="box">
+    <h2>ドット絵のコツ</h2>
+    <p style="margin:0; color:var(--muted);">
+      どれも「なぜそうするか」まで書いてあります。理由が分かっている決まりだけが、
+      破っていい場面を教えてくれます。
+    </p>
+
+    <h3>形</h3>
+    <ul>
+      <li><b>まずシルエットで読めるか。</b>
+        <span class="why">全部を黒く塗りつぶしても何か分かるなら、形は勝っています。分からないなら、色をいくら足しても直りません。
+        上のバーの<b>明暗チェック</b>（半分塗った丸）で色を抜くと、明るさだけで足りているか分かります。</span></li>
+      <li><b>離れた 1 点を置かない。</b>
+        <span class="why">ぽつんと置いた点は模様に見えず、ただのゴミに見えます。細部は数点まとめて「かたまり」にすると、意図として読まれます。</span></li>
+      <li><b>段差の長さを揃える。</b>
+        <span class="why">1,2,1,3 と不揃いだと線ではなくギザギザに見えます（ジャギー）。2,2,2 か 1,1,1 に揃えると線になります。
+        「描き方」の<b>かど消し</b>を入れておくと、なぞっている最中に曲がり角の余分な点が消えます。</span></li>
+      <li><b>曲線は段の長さを少しずつ変える。</b>
+        <span class="why">4,4,1,1 のように急に変わると、そこで折れて見えます。4,3,2,1 なら曲がって見えます。</span></li>
+    </ul>
+
+    <h3>影</h3>
+    <ul>
+      <li><b>輪郭に沿ってぐるりと暗くしない。</b>
+        <span class="why">「ピローシェーディング」と呼ばれる失敗。光がどこから来ているか消えるので、立体ではなく平たいクッションに見えます。光の向きを 1 つ決めてください。</span></li>
+      <li><b>同じ幅の帯を平行に並べない。</b>
+        <span class="why">「バンディング」。目が色ではなく色の境界線を追ってしまい、そこに線が引いてあるように見えます。</span></li>
+      <li><b>明暗の境目は、形の折れ目に置く。</b>
+        <span class="why">面が変わる所なら、帯が見えても不自然になりません。逆に平らな面の途中で切ると必ず目立ちます。</span></li>
+    </ul>
+
+    <h3>色</h3>
+    <ul>
+      <li><b>純黒と純白を端に使わない。</b>
+        <span class="why">一番暗い所を <span style="font-family:monospace;">#000</span> にすると、そこから先が作れません。もっと暗くしたい時に手が無くなります。</span></li>
+      <li><b>暗くする時は色相も回す。</b>
+        <span class="why">1 段につき 10〜15°、暗い方は寒色（青紫）へ、明るい方は暖色（黄橙）へ。ただ明度を下げただけの階調は濁って見えます。実際の影には空の青が回り込んでいます。
+        色の右の<b>階調</b>を押すと、今の色から 5 段をこの決まりで作って色見本に足します。</span></li>
+      <li><b>影は彩度を少し下げ、光は少し上げる。</b></li>
+      <li><b>色を足すより使い回す。</b>
+        <span class="why">同じ階調を肌にも服にも当てると、絵全体が 1 つの世界にまとまります。バラバラの色を増やすほど散らかります。</span></li>
+    </ul>
+
+    <h3>輪郭</h3>
+    <ul>
+      <li><b>全部を黒で囲まない。</b>
+        <span class="why">隣り合う色まで暗く見え、面が潰れて平らになります。</span></li>
+      <li><b>光が当たる側の輪郭は明るい色に置き換える。</b>
+        <span class="why">ふつう左上。背景と接する側（右下）だけ暗い線で守ると、形は保ったまま柔らかくなります。これを selective outlining（selout）と呼びます。
+        変換の「締め方」にある<b>光が当たる側は明るくする</b>がこれです。決まったパレットを使っていても、その中の色にしか寄せないので色は増えません。</span></li>
+      <li><b>地面に接する所は輪郭を切る。</b>
+        <span class="why">ぐるりと囲い切ると、地面から浮いて見えます。</span></li>
+    </ul>
+
+    <h3>アンチエイリアス（境目をなじませる）</h3>
+    <ul>
+      <li><b>内側だけに、手で置く。</b>
+        <span class="why">透過スプライトの外周に付けると、背景が変わったとき縁に前の背景色が残って汚れます。</span></li>
+      <li><b>段が長いほど、なじませる中間色も長く。</b>
+        <span class="why">1 マスしかない段に中間色を 1 つ置いても効きません。</span></li>
+      <li><b>中間色は明度が中間なら足りる。</b>
+        <span class="why">色相は多少ずれても見た目に響きません。悩む所ではありません。</span></li>
+      <li><b>小さい絵には付けない。</b>
+        <span class="why">32×32 くらいだと、なじませたつもりの点がただのノイズに見えます。</span></li>
+    </ul>
+
+    <h3>網かけ（ディザ）</h3>
+    <ul>
+      <li><b>ざらつく物に使う。</b>
+        <span class="why">石・砂・布・錆。つるつるした金属や肌に使うと不自然です。</span></li>
+      <li><b>階調の代わりに使わない。</b>
+        <span class="why">色を 1 段足せるなら、足すほうが速くてきれいです。網かけは色数が本当に足りない時の手当てです。</span></li>
+    </ul>
+
+    <h3>書き出し</h3>
+    <ul>
+      <li><b>整数倍で、補間なしで大きくして保存する。</b>
+        <span class="why">1.5 倍のような半端な倍率や、滑らかな拡大は点を滲ませます。このアプリの「保存する大きさ」は整数倍・補間なしです。</span></li>
+      <li><b>SNS に出すなら先に大きくしておく。</b>
+        <span class="why">小さい画像は向こう側で勝手に引き伸ばされ、そのとき必ずぼやけます。</span></li>
+    </ul>
+
+    <div class="src">
+      出典 —
+      <a href="https://androidarts.com/pixtut/pixelart.htm" target="_blank" rel="noopener noreferrer">Arne Niklas Jansson, Pixel Art Tutorial</a> ／
+      <a href="https://pixelparmesan.com/blog/anti-aliasing-fundamentals-for-pixel-artists" target="_blank" rel="noopener noreferrer">Pixel Parmesan, Anti-Aliasing Fundamentals</a> ／
+      <a href="https://www.derekyu.com/makegames/pixelart.html" target="_blank" rel="noopener noreferrer">Derek Yu, Pixel Art Tutorial</a> ／
+      <a href="https://pixeljoint.com/2007/10/15/2346/Pixel_Art_Challenge-_Selective_Outlining.htm" target="_blank" rel="noopener noreferrer">PixelJoint, Selective Outlining</a> ／
+      <a href="https://medium.com/pixel-grimoire" target="_blank" rel="noopener noreferrer">Pedro Medeiros, Pixel Grimoire</a>
+    </div>
+
+    <button id="tipsCloseBtn" style="width:100%; margin-top:16px;">閉じる</button>
+  </div>
 </div>
 
 <div id="aboutSheet">
@@ -1229,6 +1407,12 @@ const state = {
   previewPixels: null, // Uint8ClampedArray 形状ドラッグ中の overlay。commit前
   shapeFilled: false,  // 矩形/楕円: 枠 / 塗りつぶし
   mirrorH: false,
+  pixelPerfect: false,   // 曲がり角の余分な点を消す
+  lightDir: { dx: -1, dy: -1 },  // 選択的な輪郭で使う光の向き (既定は左上)
+  ppTrail: [],           // 直近に塗ったセルの並び (角の判定に使う)
+  ppPainted: null,       // この筆で塗ったマス。角を戻すとき巻き添えを防ぐ
+  ppSnapshot: null,      // ひと筆の描き始めの状態。角を消すときここへ戻す
+  redoBeforeStroke: null,// 描き始めに退避した redo。中断したら戻す
   mirrorV: false,
   // ── 投げ輪・選択 ──
   lassoPath: null,     // 描画中 polygon の頂点 [{x,y}, ...]
@@ -1439,6 +1623,12 @@ const el = {
   setupBtn: document.getElementById('setupBtn'),
   shapeGroupBtn: document.getElementById('shapeGroupBtn'),
   downloadSuffix: document.getElementById('downloadSuffix'),
+  exportScale: document.getElementById('exportScale'),
+  exportSizeNote: document.getElementById('exportSizeNote'),
+  valueCheckBtn: document.getElementById('valueCheckBtn'),
+  rampBtn: document.getElementById('rampBtn'),
+  pixelPerfectBtn: document.getElementById('pixelPerfectBtn'),
+  seloutEnabled: document.getElementById('seloutEnabled'),
   sampleBtns: document.querySelectorAll('.sample-btn'),
   gifDownloadBtn: document.getElementById('gifDownloadBtn'),
   gifScale: document.getElementById('gifScale'),
@@ -1544,7 +1734,15 @@ function drawOriginal() {
 }
 
 // ============ Size selection ============
+// サイズボタンの選択状態を今の state に合わせ直す
+function syncSizeButtons() {
+  el.sizeButtons.forEach(b => b.classList.toggle('active',
+    +b.dataset.w === state.width && +b.dataset.h === state.height));
+}
+
 function applyCanvasSize(w, h) {
+  const prevW = state.width, prevH = state.height;
+  if (w === prevW && h === prevH && state.pixels) return true;
   state.width = w;
   state.height = h;
   el.sizeLabel.textContent = state.width;
@@ -1553,6 +1751,15 @@ function applyCanvasSize(w, h) {
   // 既に変換済みなら、新サイズで再描画 (バッファサイズが合わなくなるので再変換が必要)
   // → 旧 pixels を破棄して空キャンバスにする (or 再変換を促す)
   if (state.pixels) {
+    // 大きさを変えると今の絵は作り直しになる。undo も自動保存も消えるので、
+    // 一度きり訊く。訊かずに消すと 20 分の作業が 1 タップで飛ぶ。
+    if (!confirm('大きさを変えると、今の絵は消えます。よろしいですか？')) {
+      state.width = prevW; state.height = prevH;
+      el.sizeLabel.textContent = state.width;
+      el.sizeLabel2.textContent = state.height;
+      syncSizeButtons();
+      return false;
+    }
     if (state.animPlaying) stopAnim();
     // バッファサイズが変わる場合は変換ボタンを再度押す必要があると明示
     state.pixels = null;
@@ -1571,17 +1778,23 @@ function applyCanvasSize(w, h) {
     renderTimeline();
     renderLayerPanel();
   }
+  updateExportNote();
   renderEditor();
+  return true;
 }
 
 el.sizeButtons.forEach(b => {
   b.addEventListener('click', () => {
+    const prevGrid = state.grid, prevNote = el.autoSizeNote.textContent;
     el.sizeButtons.forEach(x => x.classList.remove('active'));
     b.classList.add('active');
     // 手で選んだサイズは検出した格子とは無関係。格子情報を捨てる。
     state.grid = null;
     el.autoSizeNote.textContent = '';
-    applyCanvasSize(parseInt(b.dataset.w), parseInt(b.dataset.h));
+    if (!applyCanvasSize(parseInt(b.dataset.w), parseInt(b.dataset.h))) {
+      state.grid = prevGrid;
+      el.autoSizeNote.textContent = prevNote;
+    }
   });
 });
 
@@ -1596,14 +1809,22 @@ el.sizeButtons.forEach(b => {
 // 票数が増えるだけで結果は変わらず、メモリと時間だけ増える。
 const WORK_MAX = 1600;
 
+// 書き出せる画素数の上限。これを超えると toBlob が null を返す端末があり
+// （iOS Safari は 16.7M 画素で頭打ち）、黙って何も起きないように見える。
+const EXPORT_MAX_PIXELS = 16e6;
+
 // 網かけの効き。OKLab で L が概ね [0,1]、a/b が ±0.3 程度なので、
 // それに対して軽く蹴る量。
 const DITHER_L = 0.08, DITHER_AB = 0.04;
 
-function buildWorkBuffer(img, sx, sy, sw, sh) {
+function buildWorkBuffer(img, sx, sy, sw, sh, minW, minH) {
+  // 上限は速さのため。下限は正しさのため ―― 出力のマス数より作業バッファが
+  // 小さいと、1 マスあたり 0 画素になって読む物が無くなり、そこが透明のまま残る。
   const scale = Math.min(1, WORK_MAX / Math.max(sw, sh));
-  const w = Math.max(1, Math.round(sw * scale));
-  const h = Math.max(1, Math.round(sh * scale));
+  let w = Math.max(1, Math.round(sw * scale));
+  let h = Math.max(1, Math.round(sh * scale));
+  if (minW && w < minW) { h = Math.max(1, Math.round(h * minW / w)); w = minW; }
+  if (minH && h < minH) { w = Math.max(1, Math.round(w * minH / h)); h = minH; }
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   const cx = c.getContext('2d', { willReadFrequently: true });
@@ -1809,9 +2030,10 @@ function despecklePixels(px, W, H) {
 // 締まらない ── 縁に落とす影が形を立たせる。
 // パレットが決まっているときは、そのパレットの中で「今より暗い色」に寄せる。
 // 勝手に色を増やすとゲームボーイや PICO-8 の約束を破ることになる。
-function tightenOutline(px, W, H, strength, paletteRGB) {
+function tightenOutline(px, W, H, strength, paletteRGB, selout, light) {
   const amount = [0, 0.30, 0.50, 0.70][strength] || 0;
   if (amount <= 0) return px;
+  light = light || { dx: -1, dy: -1 };
   const out = new Uint8ClampedArray(px);
   const pal = paletteRGB ? paletteRGB.map(c => ({ rgb: c, lab: rgbToOklab(c.r, c.g, c.b) })) : null;
   const solid = (x, y) => x >= 0 && x < W && y >= 0 && y < H && px[(y * W + x) * 4 + 3] !== 0;
@@ -1821,13 +2043,28 @@ function tightenOutline(px, W, H, strength, paletteRGB) {
       if (px[i+3] === 0) continue;
       if (solid(x-1, y) && solid(x+1, y) && solid(x, y-1) && solid(x, y+1)) continue;
       const lab = rgbToOklab(px[i], px[i+1], px[i+2]);
-      const tL = lab.L * (1 - amount);
-      const tA = lab.A * (1 - amount * 0.5);
-      const tB = lab.B * (1 - amount * 0.5);
+
+      // その画素が外を向いている方向。空いている隣を足し合わせる。
+      // 光と同じ側を向いていれば「当たっている縁」。
+      let nx = 0, ny = 0;
+      if (!solid(x-1, y)) nx -= 1;
+      if (!solid(x+1, y)) nx += 1;
+      if (!solid(x, y-1)) ny -= 1;
+      if (!solid(x, y+1)) ny += 1;
+      const lit = selout && (nx * light.dx + ny * light.dy) > 0;
+
+      // 明るくする側は控えめに。強くやると縁だけ浮いて見える。
+      const k = lit ? amount * 0.7 : amount;
+      const tL = lit ? lab.L + (1 - lab.L) * k : lab.L * (1 - k);
+      const tA = lab.A * (1 - k * 0.5);
+      const tB = lab.B * (1 - k * 0.5);
+
       if (pal) {
         let best = null, bd = Infinity;
         for (const p of pal) {
-          if (p.lab.L >= lab.L) continue;   // 今より暗い色にしか寄せない
+          // 明るくする側は今より明るい色、暗くする側は今より暗い色にしか寄せない。
+          // どちらもパレットの中から選ぶので、色数の約束は破らない。
+          if (lit ? p.lab.L <= lab.L : p.lab.L >= lab.L) continue;
           const dL = tL - p.lab.L, dA = tA - p.lab.A, dB = tB - p.lab.B;
           const d = dL*dL + dA*dA + dB*dB;
           if (d < bd) { bd = d; best = p; }
@@ -2019,10 +2256,14 @@ el.autoSizeBtn.addEventListener('click', () => {
       el.autoSizeNote.textContent = '格子は見つかりませんでした。上のサイズから選んでください。';
       return;
     }
+    const prevGrid = state.grid;
     state.grid = g;
     el.sizeButtons.forEach(x => x.classList.remove('active'));
     el.autoSizeNote.textContent = `${g.nx}×${g.ny} で見つかりました（確からしさ ${g.score.toFixed(1)}）。`;
-    applyCanvasSize(g.nx, g.ny);
+    if (!applyCanvasSize(g.nx, g.ny)) {
+      state.grid = prevGrid;
+      el.autoSizeNote.textContent = '大きさは変えませんでした。';
+    }
   }));
 });
 
@@ -2063,7 +2304,7 @@ function convert() {
   // ⚠️ ここが以前と決定的に違う点。昔は先に W×H まで縮めていた。
   // 平均縮小が輪郭に中間色を作り、その中間色がパレットの枠を食って
   // 黒線そのものを追い出していた。色は必ず高解像度側で決める。
-  const imgData = buildWorkBuffer(state.sourceImg, sx, sy, sw, sh);
+  const imgData = buildWorkBuffer(state.sourceImg, sx, sy, sw, sh, W, H);
   const workW = imgData.width, workH = imgData.height;
   const data = imgData.data;
 
@@ -2101,7 +2342,7 @@ function convert() {
 
   let paletteRGB;
   if (preset && PALETTE_PRESETS[preset]) {
-    paletteRGB = PALETTE_PRESETS[preset];
+    paletteRGB = PALETTE_PRESETS[preset].map(c => ({ r: c.r, g: c.g, b: c.b }));
   } else if (limitN > 0) {
     paletteRGB = quantize(data, limitN);
   } else {
@@ -2132,7 +2373,8 @@ function convert() {
   }
   const outline = el.outlineStrength ? (parseInt(el.outlineStrength.value, 10) || 0) : 0;
   if (outline > 0) {
-    pixels = tightenOutline(pixels, W, H, outline, doMap ? paletteRGB : null);
+    const selout = !!(el.seloutEnabled && el.seloutEnabled.checked);
+    pixels = tightenOutline(pixels, W, H, outline, doMap ? paletteRGB : null, selout, state.lightDir);
   }
 
   state.pixels = pixels;
@@ -2160,6 +2402,7 @@ function convert() {
 
 // 絵が入った時に開ける道具を、一度に開ける。変換・新規・復元の 3 つから呼ぶ。
 function enableEditingUI() {
+  updateExportNote();
   el.downloadBtn.disabled = false;
   el.sheetDownloadBtn.disabled = false;
   el.folderDownloadBtn.disabled = false;
@@ -2526,6 +2769,87 @@ el.mirrorHBtn.addEventListener('click', () => {
   state.mirrorH = !state.mirrorH;
   el.mirrorHBtn.classList.toggle('active', state.mirrorH);
 });
+
+// かど消しは描き方の好みなので、次に開いたときも覚えておく。
+const PP_KEY = 'pixelizer.pixelPerfect';
+function applyPixelPerfect(on) {
+  state.pixelPerfect = on;
+  el.pixelPerfectBtn.classList.toggle('active', on);
+  try { localStorage.setItem(PP_KEY, on ? '1' : '0'); } catch (e) {}
+}
+el.pixelPerfectBtn.addEventListener('click', () => applyPixelPerfect(!state.pixelPerfect));
+try { applyPixelPerfect(localStorage.getItem(PP_KEY) === '1'); } catch (e) { applyPixelPerfect(false); }
+
+// 明暗チェックは「今だけ確かめる」ものなので覚えない。
+el.valueCheckBtn.addEventListener('click', () => {
+  const on = !document.getElementById('app').classList.contains('value-check');
+  document.getElementById('app').classList.toggle('value-check', on);
+  // 拡大プレビューは body 直下に作られるので、そちらにも印を付ける
+  document.body.classList.toggle('value-check', on);
+  el.valueCheckBtn.classList.toggle('on', on);
+  el.valueCheckBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+});
+
+// 光の向き（選択的な輪郭で使う）
+document.querySelectorAll('[data-light]').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('[data-light]').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    const [dx, dy] = b.dataset.light.split(',').map(Number);
+    state.lightDir = { dx, dy };
+  });
+});
+
+// ── 色の階調をつくる ────────────────────────────────
+// ただ明度を上下させただけの階調は濁って見える。実際の影には空の青が
+// 回り込み、光は暖色に寄る。なので 1 段ごとに色相も回す。
+const RAMP_STEPS = 5;      // 暗 2 / 基準 / 明 2
+const RAMP_HUE = 14;       // 1 段あたりの色相の回転 (度)
+const RAMP_L = 0.13;       // 1 段あたりの明度差 (OKLab の L)
+const RAMP_CHROMA = 0.12;  // 1 段あたりの彩度の増減 (比)
+const HUE_COOL = 264;      // 影が寄る先 (青)
+const HUE_WARM = 70;       // 光が寄る先 (黄橙)
+
+// h から target へ、最大 deg だけ近い方向に回す。行き過ぎない。
+function hueTowards(h, target, deg) {
+  const d = ((target - h + 540) % 360) - 180;
+  const step = Math.min(Math.abs(d), deg) * Math.sign(d);
+  return (h + step + 360) % 360;
+}
+
+function makeRamp(rgb) {
+  const lab = rgbToOklab(rgb.r, rgb.g, rgb.b);
+  const chroma = Math.hypot(lab.A, lab.B);
+  const h0 = Math.atan2(lab.B, lab.A) * 180 / Math.PI;
+  const half = (RAMP_STEPS - 1) / 2;
+  const out = [];
+  for (let k = -half; k <= half; k++) {
+    // 端を純黒・純白にしない。そこまで行くと、その先が作れなくなる。
+    // ただし基準の段（k=0）は選んだ色そのままにする。丸めると別の色になる。
+    const L = k === 0 ? lab.L : Math.max(0.10, Math.min(0.95, lab.L + k * RAMP_L));
+    const h = k === 0 ? h0 : hueTowards(h0, k < 0 ? HUE_COOL : HUE_WARM, RAMP_HUE * Math.abs(k));
+    // 影は彩度を少し下げ、光は少し上げる
+    const c = Math.max(0, chroma * (1 + k * RAMP_CHROMA));
+    const rad = h * Math.PI / 180;
+    out.push(oklabToRgb(L, Math.cos(rad) * c, Math.sin(rad) * c));
+  }
+  return out;
+}
+
+el.rampBtn.addEventListener('click', () => {
+  const ramp = makeRamp(state.color);
+  const seen = new Set(state.palette.map(c => `${c.r},${c.g},${c.b}`));
+  let added = 0;
+  for (const c of ramp) {
+    const key = `${c.r},${c.g},${c.b}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    state.palette.push(c);
+    added++;
+  }
+  renderPalette();
+  toast(added ? `${added} 色を色見本に足しました` : 'その階調はもう色見本にあります');
+});
 el.mirrorVBtn.addEventListener('click', () => {
   state.mirrorV = !state.mirrorV;
   el.mirrorVBtn.classList.toggle('active', state.mirrorV);
@@ -2615,9 +2939,12 @@ function abortStroke() {
   } else if (state.movingFloat) {
     // 浮遊バッファの位置はそのまま。掴んでいる状態だけ解く。
   } else {
-    // 描き始めに積んだ undo をそのまま食べて元の絵に戻す
+    // 描き始めに積んだ undo をそのまま食べて元の絵に戻す。
+    // pushUndo が消した redo も戻す ―― 起きなかった操作で
+    // やり直しの履歴を失わせない。
     const snap = state.undoStack.pop();
     if (snap) applySnapshot(snap);
+    if (state.redoBeforeStroke) { state.redoStack = state.redoBeforeStroke; }
     updateHistoryButtons();
     renderTimeline();
     renderLayerPanel();
@@ -2629,6 +2956,10 @@ function abortStroke() {
   state.dragStart = null;
   state.dragEnd = null;
   state.previewPixels = null;
+  state.ppTrail = [];
+  state.ppPainted = null;
+  state.ppSnapshot = null;
+  state.redoBeforeStroke = null;
   renderEditor();
 }
 
@@ -2648,6 +2979,9 @@ function beginStroke(e) {
   strokeId = e.pointerId;
   if (tool === 'lasso') { handleLassoMouseDown(c); return; }
 
+  // pushUndo は redo を捨てる。中断（ピンチ等）で描かなかった時に
+  // やり直しの履歴まで失わないよう、先に退避しておく。
+  state.redoBeforeStroke = state.redoStack.slice();
   pushUndo();
   state.drawing = true;
   state.activeTool = tool;
@@ -2657,6 +2991,7 @@ function beginStroke(e) {
   state.lastPaint = null;
 
   if (tool === 'pencil' || tool === 'eraser') {
+    ppBegin();
     paintStrokeTo(c.x, c.y, tool);
     renderEditor();
   } else {
@@ -2669,11 +3004,79 @@ function beginStroke(e) {
 function paintStrokeTo(x, y, tool) {
   const last = state.lastPaint;
   if (last && (Math.abs(x - last.x) > 1 || Math.abs(y - last.y) > 1)) {
-    for (const p of bresenhamLine(last.x, last.y, x, y)) paintPixel(p.x, p.y, tool);
+    for (const p of bresenhamLine(last.x, last.y, x, y)) {
+      paintPixel(p.x, p.y, tool);
+      ppTrim(p.x, p.y);
+    }
   } else {
     paintPixel(x, y, tool);
+    ppTrim(x, y);
   }
   state.lastPaint = { x, y };
+}
+
+// ── かど消し（ピクセルパーフェクト）────────────────────
+// 曲線を指でなぞると、曲がり角に L 字の余分な点が残って線が 2px に太る。
+// 直前 3 点が L 字なら真ん中を描く前の状態に戻す。Aseprite の Pixel Perfect と
+// 同じ考え方で、判定は「両隣が縦横で隣接し、かつ両端どうしが斜め」だけ。
+function ppBegin() {
+  state.ppTrail = [];
+  state.ppPainted = new Set();
+  state.ppSnapshot = state.pixelPerfect && state.pixels
+    ? new Uint8ClampedArray(state.pixels) : null;
+}
+
+// この筆で塗ったマスを覚えておく。角を戻すとき、線の正規の一部まで
+// 巻き添えで消さないための台帳。
+function ppMark(x, y) {
+  if (!state.ppSnapshot) return;
+  const W = state.width, H = state.height;
+  for (const p of mirrorCoords(x, y)) {
+    if (p.x < 0 || p.y < 0 || p.x >= W || p.y >= H) continue;
+    state.ppPainted.add(p.y * W + p.x);
+  }
+}
+
+function ppRestore(x, y) {
+  const snap = state.ppSnapshot;
+  if (!snap) return;
+  const W = state.width, H = state.height;
+  // 角として通ったマスの一覧。ここに載っている所は線の正規の一部なので戻さない。
+  const keep = new Set();
+  for (const t of state.ppTrail) {
+    if (t.x === x && t.y === y) continue;
+    for (const p of mirrorCoords(t.x, t.y)) {
+      if (p.x < 0 || p.y < 0 || p.x >= W || p.y >= H) continue;
+      keep.add(p.y * W + p.x);
+    }
+  }
+  // 対称描き中は写した先も一緒に戻す。片方だけ残すと左右が食い違う。
+  // ただし軸をまたぐ線では鏡像が線本体と重なるので、そこは残す。
+  for (const p of mirrorCoords(x, y)) {
+    if (p.x < 0 || p.y < 0 || p.x >= W || p.y >= H) continue;
+    const k = p.y * W + p.x;
+    if (keep.has(k)) continue;
+    const i = k * 4;
+    state.pixels[i] = snap[i]; state.pixels[i+1] = snap[i+1];
+    state.pixels[i+2] = snap[i+2]; state.pixels[i+3] = snap[i+3];
+  }
+}
+
+function ppTrim(x, y) {
+  if (!state.pixelPerfect || !state.ppSnapshot) return;
+  const t = state.ppTrail;
+  const last = t[t.length - 1];
+  ppMark(x, y);
+  if (last && last.x === x && last.y === y) return;   // 同じセルの重ね塗りは数えない
+  t.push({ x, y });
+  if (t.length < 3) return;
+  const a = t[t.length - 3], b = t[t.length - 2], c = t[t.length - 1];
+  const adj = (p, q) => Math.abs(p.x - q.x) + Math.abs(p.y - q.y) === 1;
+  if (adj(a, b) && adj(b, c) && Math.abs(a.x - c.x) === 1 && Math.abs(a.y - c.y) === 1) {
+    ppRestore(b.x, b.y);
+    t.splice(t.length - 2, 1);   // 角は無かったことにして、次の判定に持ち越さない
+  }
+  if (t.length > 8) t.shift();
 }
 
 function moveStroke(e) {
@@ -2714,6 +3117,10 @@ function endStroke() {
   state.dragEnd = null;
   state.previewPixels = null;
   state.lastPaint = null;
+  state.ppTrail = [];
+  state.ppPainted = null;
+  state.ppSnapshot = null;
+  state.redoBeforeStroke = null;
   renderEditor();
   renderTimeline();
 }
@@ -3378,6 +3785,9 @@ el.selCancelBtn.addEventListener('click', cancelSelection);
 
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
+    // 上に何か開いているならそちらが先。手前の板を閉じただけのつもりで
+    // 切り取り中の絵まで消えるのを防ぐ。
+    if (escapeTopLayer()) return;
     if (state.lassoActive) {
       state.lassoActive = false;
       state.lassoPath = null;
@@ -3606,6 +4016,9 @@ el.redoBtn.addEventListener('click', () => {
   renderEditor();
 });
 window.addEventListener('keydown', (e) => {
+  // 名前欄などに文字を打っている最中は、その入力欄の取り消しに任せる
+  const t = document.activeElement;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') {
     e.preventDefault();
     el.undoBtn.click();
@@ -3671,7 +4084,9 @@ function addFrame(copyCurrent) {
   // 全レイヤーに新しいセル (空 or 現在のコピー) を追加
   state.layers.forEach((layer, lIdx) => {
     const src = layer.frames[state.currentFrame];
-    const buf = (copyCurrent && lIdx === state.currentLayer)
+    // 「複製」なら全レイヤーを写す。現在レイヤーだけ写して他を空にすると、
+    // 多層の絵を複製したとき他の層の中身が黙って消える。
+    const buf = copyCurrent
       ? new Uint8ClampedArray(src)
       : new Uint8ClampedArray(W * H * 4);
     layer.frames.splice(state.currentFrame + 1, 0, buf);
@@ -3815,22 +4230,70 @@ el.onionSkinBtn.addEventListener('click', () => {
 
 // ============ Download ============
 //   Current frame = all visible layers alpha-composited into one PNG.
+//
+// 1:1 で保存すると 76×82px の「小さい画像」になる。SNS もチャットも
+// ビューアも、それを勝手に引き伸ばして滲ませる。こちらで先に
+// 整数倍・補間なしで大きくしておけば、どこに出しても点のまま残る。
+function exportScale() {
+  const v = el.exportScale ? parseInt(el.exportScale.value, 10) : 1;
+  return Number.isFinite(v) && v > 0 ? v : 1;
+}
+
+// 端末が扱える画素数まで倍率を落とす。落としたら黙らずに知らせる。
+function safeExportScale(cells) {
+  const W = state.width, H = state.height;
+  let k = exportScale();
+  const area = () => W * k * H * k * (cells || 1);
+  if (area() <= EXPORT_MAX_PIXELS) return k;
+  while (k > 1 && area() > EXPORT_MAX_PIXELS) k--;
+  toast(`大きすぎるので ${k}× に落として保存します`);
+  return k;
+}
+
+function saveBlob(blob, name) {
+  if (!blob) { toast('大きすぎて保存できませんでした'); return; }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  // すぐ取り消すと保存を打ち切る実装があるので、少し待ってから捨てる
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function frameToCanvas(idx, scale) {
+  const W = state.width, H = state.height;
+  const src = document.createElement('canvas');
+  src.width = W; src.height = H;
+  const sctx = src.getContext('2d');
+  const id = sctx.createImageData(W, H);
+  id.data.set(compositeFrame(idx));
+  sctx.putImageData(id, 0, 0);
+  if (scale <= 1) return src;
+  const out = document.createElement('canvas');
+  out.width = W * scale; out.height = H * scale;
+  const octx = out.getContext('2d');
+  // ⚠️ これを消し忘れると既定の補間が入って、拡大したぶんだけ滲む
+  octx.imageSmoothingEnabled = false;
+  octx.drawImage(src, 0, 0, out.width, out.height);
+  return out;
+}
+
+function updateExportNote() {
+  if (!el.exportSizeNote) return;
+  if (!state.pixels) { el.exportSizeNote.textContent = ''; return; }
+  const k = exportScale(), W = state.width, H = state.height;
+  el.exportSizeNote.textContent = k === 1
+    ? `${W}×${H} px のまま`
+    : `${W}×${H} → ${W * k}×${H * k} px`;
+}
+if (el.exportScale) el.exportScale.addEventListener('change', updateExportNote);
+
 el.downloadBtn.addEventListener('click', () => {
   if (!state.pixels) return;
-  const W = state.width, H = state.height;
-  const out = document.createElement('canvas');
-  out.width = W; out.height = H;
-  const octx = out.getContext('2d');
-  const id = octx.createImageData(W, H);
-  id.data.set(compositeFrame(state.currentFrame));
-  octx.putImageData(id, 0, 0);
+  const out = frameToCanvas(state.currentFrame, safeExportScale(1));
   out.toBlob((blob) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `pixelized_${W}x${H}.png`;
-    a.click();
-    URL.revokeObjectURL(url);
+    saveBlob(blob, `${safeFolderName(el.spriteName.value)}_${out.width}x${out.height}.png`);
   }, 'image/png');
 });
 
@@ -3844,16 +4307,9 @@ el.downloadBtn.addEventListener('click', () => {
 function safeFolderName(s) {
   return (s || 'sprite').trim().replace(/[^a-zA-Z0-9_\-]/g, '_') || 'sprite';
 }
-function frameToPngBlob(idx) {
+function frameToPngBlob(idx, scale) {
   return new Promise(resolve => {
-    const W = state.width, H = state.height;
-    const out = document.createElement('canvas');
-    out.width = W; out.height = H;
-    const octx = out.getContext('2d');
-    const id = octx.createImageData(W, H);
-    id.data.set(compositeFrame(idx));
-    octx.putImageData(id, 0, 0);
-    out.toBlob(resolve, 'image/png');
+    frameToCanvas(idx, scale || safeExportScale(1)).toBlob(resolve, 'image/png');
   });
 }
 el.folderDownloadBtn.addEventListener('click', async () => {
@@ -3901,27 +4357,18 @@ el.folderDownloadBtn.addEventListener('click', async () => {
 el.sheetDownloadBtn.addEventListener('click', () => {
   const F = frameCount();
   if (F === 0) return;
-  const W = state.width, H = state.height;
+  const k = safeExportScale(F);
+  const CW = state.width * k, CH = state.height * k;
   const out = document.createElement('canvas');
-  out.width = W * F; out.height = H;
+  out.width = CW * F; out.height = CH;
   const octx = out.getContext('2d');
+  octx.imageSmoothingEnabled = false;
   for (let idx = 0; idx < F; idx++) {
-    const cell = document.createElement('canvas');
-    cell.width = W; cell.height = H;
-    const cctx = cell.getContext('2d');
-    const id = cctx.createImageData(W, H);
-    // 各フレームを合成して書き出す
-    id.data.set(compositeFrame(idx));
-    cctx.putImageData(id, 0, 0);
-    octx.drawImage(cell, idx * W, 0);
+    // 各フレームを合成して並べる
+    octx.drawImage(frameToCanvas(idx, k), idx * CW, 0);
   }
   out.toBlob((blob) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `pixelized_${W}x${H}_${F}frames.png`;
-    a.click();
-    URL.revokeObjectURL(url);
+    saveBlob(blob, `${safeFolderName(el.spriteName.value)}_${CW}x${CH}_${F}frames.png`);
   }, 'image/png');
 });
 
@@ -4060,6 +4507,17 @@ function updateGifButton() {
     ? 'Add at least 2 frames to export a GIF'
     : 'Export all frames as an animated GIF';
 }
+// 進捗板は押せば引っ込む。閉じる手段の無い全画面の覆いを作らない。
+// (書き出しに失敗したとき、再読み込み以外に逃げ道が無くなるのを防ぐ)
+function attachGifDismiss(node, gifInst) {
+  if (node.dataset.dismissBound) return;
+  node.dataset.dismissBound = '1';
+  node.addEventListener('click', () => {
+    try { if (gifInst && gifInst.abort) gifInst.abort(); } catch (e) {}
+    hideGifProgress();
+  });
+}
+
 function showGifProgress() {
   let n = document.getElementById('gifProgress');
   if (n) return n;
@@ -4068,9 +4526,10 @@ function showGifProgress() {
   n.className = 'gif-progress';
   n.innerHTML = `
     <div class="gif-progress-box">
-      <div class="gif-progress-title">Rendering GIF…</div>
+      <div class="gif-progress-title">GIF を書き出しています…</div>
       <div class="gif-progress-bar"><div class="gif-progress-bar-fill"></div></div>
       <div class="gif-progress-pct">0%</div>
+      <div class="gif-progress-hint">押すと中止します</div>
     </div>`;
   document.body.appendChild(n);
   return n;
@@ -4110,17 +4569,16 @@ el.gifDownloadBtn.addEventListener('click', () => {
     transparent: CHROMA,
   });
 
-  showGifProgress();
+  attachGifDismiss(showGifProgress(), gif);
   gif.on('progress', p => setGifProgress(Math.round(p * 100)));
   gif.on('finished', blob => {
     hideGifProgress();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `pixelized_${W}x${H}_${F}f_${scale}x.gif`;
-    a.click();
-    URL.revokeObjectURL(url);
+    saveBlob(blob, `${safeFolderName(el.spriteName.value)}_${W}x${H}_${F}f_${scale}x.gif`);
   });
+  // ⚠️ 失敗の受け口が無いと、進捗板 (画面全体・閉じる手段なし) が
+  //    出たまま戻らず、再読み込み以外に逃げ道が無くなる。
+  gif.on('abort', () => { hideGifProgress(); toast('GIF の書き出しを止めました'); });
+  gif.on('error', () => { hideGifProgress(); toast('GIF を書き出せませんでした'); });
 
   for (let idx = 0; idx < F; idx++) {
     // 1× indexed canvas with chroma-key fill for transparent pixels.
@@ -4147,7 +4605,12 @@ el.gifDownloadBtn.addEventListener('click', () => {
     cctx.drawImage(small, 0, 0, W * scale, H * scale);
     gif.addFrame(cell, { delay: delayMs });
   }
-  gif.render();
+  try {
+    gif.render();
+  } catch (err) {
+    hideGifProgress();
+    toast('GIF を書き出せませんでした');
+  }
 });
 // gif.js loads async; refresh button state once it's available.
 window.addEventListener('load', () => updateGifButton());
@@ -4305,6 +4768,7 @@ function saveWorkNow() {
       currentLayer: state.currentLayer,
       currentFrame: state.currentFrame,
       color: state.color,
+      palette: state.palette,
       layers: state.layers.map(l => ({
         name: l.name, opacity: l.opacity, visible: l.visible,
         frames: l.frames.map(celToDataURL),
@@ -4357,6 +4821,8 @@ async function restoreWork() {
     state.currentFrame = Math.min(data.currentFrame || 0, state.layers[0].frames.length - 1);
     refreshActiveCel();
     if (data.color) { state.color = data.color; updateColorUI(); }
+    // 作った色見本も一緒に戻す。絵だけ戻って色が消えると作業を続けられない。
+    if (Array.isArray(data.palette)) { state.palette = data.palette; renderPalette(); }
     state.undoStack = []; state.redoStack = [];
     updateHistoryButtons();
     enableEditingUI();
@@ -4430,9 +4896,23 @@ document.querySelectorAll('.pane [data-close]').forEach(b => {
   b.addEventListener('click', closePane);
 });
 if (sheetScrim) sheetScrim.addEventListener('click', closePane);
-window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePane(); });
+// Escape は一番手前の層だけが受け取る。閉じたら true を返す。
+function escapeTopLayer() {
+  const preview = document.querySelector('.preview-modal');
+  if (preview) { preview.remove(); return true; }
+  const tips = document.getElementById('tipsSheet');
+  if (tips && tips.classList.contains('open')) { tips.classList.remove('open'); return true; }
+  const about = document.getElementById('aboutSheet');
+  if (about && about.classList.contains('open')) { about.classList.remove('open'); return true; }
+  if (document.querySelector('.pane.open')) { closePane(); return true; }
+  return false;
+}
 // 画面が広がったら板の開閉状態を捨てる (列表示に戻るため)
-window.matchMedia('(max-width: 899px)').addEventListener('change', closePane);
+// ⚠️ addEventListener を持たない古い Safari があり、そこで例外が出ると
+//    これ以降の初期化（段階・道具・共有・SW 登録）が丸ごと動かなくなる。
+const _mqSheet = window.matchMedia('(max-width: 899px)');
+if (_mqSheet.addEventListener) _mqSheet.addEventListener('change', closePane);
+else if (_mqSheet.addListener) _mqSheet.addListener(closePane);
 
 // ══ 段階（何も無い → 準備 → 描く）════════════════════════
 // 読み込みと変換は一度きりの段取りで、描くのが常態。
@@ -4467,6 +4947,13 @@ el.setupBtn.addEventListener('click', () => {
 const ANIM_KEY = 'pixelizer.anim';
 
 function applyAnimEnabled(on) {
+  // 切ると コマ一覧・前後移動・シート/GIF 書き出しが全部消える。
+  // コマが 2 つ以上あるまま切ると、今開いていないコマに二度と手が届かない。
+  if (!on && frameCount() > 1) {
+    el.animEnabled.checked = true;
+    toast('コマが 2 つ以上あります。1 つに減らしてから切ってください');
+    return;
+  }
   appEl.classList.toggle('anim', on);
   el.animEnabled.checked = on;
   el.downloadSuffix.textContent = on ? '（今のコマ）' : '';
@@ -4490,7 +4977,11 @@ function setShapesOpen(on) {
   el.shapeGroupBtn.setAttribute('aria-expanded', on ? 'true' : 'false');
 }
 el.shapeGroupBtn.addEventListener('click', () => {
-  setShapesOpen(!dockEl.classList.contains('shapes'));
+  const on = !dockEl.classList.contains('shapes');
+  // 畳むときに かたちの道具を選んだままだと、選択中の道具が
+  // 画面から消えて「鉛筆に見えるのに四角が描ける」状態になる。
+  if (!on && SHAPE_TOOLS.includes(state.tool)) setActive('pencil');
+  setShapesOpen(on);
 });
 // かたちの道具を選んでいる間は畳まない (選択中の道具が消えてしまう)
 document.querySelectorAll('#dock [data-tool]').forEach(b => {
@@ -4532,9 +5023,10 @@ if (!canShareFiles && el.shareBtn) el.shareBtn.style.display = 'none';
 if (el.shareBtn) {
   el.shareBtn.addEventListener('click', async () => {
     if (!state.pixels) return;
-    const W = state.width, H = state.height;
-    const blob = await frameToPngBlob(state.currentFrame);
-    if (!blob) return;
+    const k = safeExportScale(1);
+    const W = state.width * k, H = state.height * k;
+    const blob = await frameToPngBlob(state.currentFrame, k);
+    if (!blob) { toast('大きすぎて送れませんでした'); return; }
     const file = new File([blob], `${safeFolderName(el.spriteName.value)}_${W}x${H}.png`, { type: 'image/png' });
     if (!navigator.canShare({ files: [file] })) { toast('この端末では送れません'); return; }
     try {
@@ -4555,6 +5047,18 @@ function closeAbout() { aboutSheet.classList.remove('open'); }
 });
 document.getElementById('aboutCloseBtn').addEventListener('click', closeAbout);
 aboutSheet.addEventListener('click', (e) => { if (e.target === aboutSheet) closeAbout(); });
+
+// ── ドット絵のコツ ─────────────────────────────────
+const tipsSheet = document.getElementById('tipsSheet');
+function closeTips() { tipsSheet.classList.remove('open'); }
+document.getElementById('tipsBtn').addEventListener('click', () => {
+  closePane();
+  tipsSheet.classList.add('open');
+  tipsSheet.querySelector('.box').scrollTop = 0;
+});
+document.getElementById('tipsCloseBtn').addEventListener('click', closeTips);
+tipsSheet.addEventListener('click', (e) => { if (e.target === tipsSheet) closeTips(); });
+
 
 // ── オフラインで開けるようにする ───────────────────────
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

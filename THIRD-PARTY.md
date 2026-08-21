@@ -42,6 +42,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ## DotGothic16
 
 - 用途: 見出しなどのドット風書体
-- 扱い: 同梱せず、Google Fonts から読み込んでいます
+- 扱い: **同梱も読み込みもしていません。** 端末に入っている場合だけ使われます
+- 理由: Google Fonts から読み込むと、開くたびに IP・UA・リファラが Google へ渡ります。
+  「アップロードなし・追跡なし」と書いてある以上、書体だけ例外にはできないため外しました
+- 入っていない端末では `Press Start 2P` → 等幅フォント の順に落ちます
 - ライセンス: SIL Open Font License 1.1
 - 入手元: <https://fonts.google.com/specimen/DotGothic16>
