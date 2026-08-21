@@ -527,6 +527,31 @@
   #aboutSheet dd { margin: 2px 0 0; color: var(--muted); }
 
   /* コツの板。器は「このアプリについて」と同じで、中身が長いぶん広く取る。 */
+  .works-list { display: flex; flex-direction: column; gap: 1px; background: var(--border-soft); }
+  .work-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 8px; background: var(--panel-soft);
+    cursor: pointer; min-height: var(--tap);
+  }
+  .work-row:hover { background: var(--panel); }
+  .work-row.current { background: var(--panel); box-shadow: inset 3px 0 0 var(--accent); }
+  .work-thumb {
+    width: 40px; height: 40px; flex: 0 0 auto;
+    image-rendering: pixelated; object-fit: contain;
+    background: var(--bg-deep); border: 1px solid var(--border-soft);
+  }
+  .work-meta { min-width: 0; flex: 1 1 auto; }
+  .work-name {
+    font-size: 12px; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .work-sub { font-size: 10px; color: var(--muted); }
+  .work-del {
+    flex: 0 0 auto; width: 44px; min-height: 44px; padding: 0; margin: 0;
+    background: none; border: none; color: var(--muted); font-size: 15px;
+  }
+  .works-empty { font-size: 11px; color: var(--muted); padding: 10px 2px; line-height: 1.7; }
+
   #tipsSheet {
     position: fixed; inset: 0; z-index: 900;
     background: rgba(0,0,0,0.78);
@@ -744,7 +769,7 @@
        畳み方を間違えたときに中身を黙って切り落とさないため（保険）。
        溢れていないことは実測で確かめる。 */
     /* 設定は列の中に居座らせず、押したときだけ浮かせる */
-    #paneMore {
+    #paneMore, #paneWorks {
       display: none;
       position: fixed; z-index: 300;
       top: calc(var(--appbar-h) + 8px); right: 8px; width: 300px;
@@ -752,8 +777,8 @@
       border: 1px solid var(--border-soft);
       box-shadow: 0 10px 34px rgba(0,0,0,0.55);
     }
-    #paneMore.open { display: block; }
-    #paneMore .pane-close {
+    #paneMore.open, #paneWorks.open { display: block; }
+    #paneMore .pane-close, #paneWorks .pane-close {
       display: block; position: absolute; top: 6px; right: 6px;
       width: 32px; min-height: 32px; padding: 0; margin: 0;
       background: none; border: none; color: var(--muted); font-size: 18px;
@@ -986,6 +1011,14 @@
               </svg>
               <span>写真・画像から</span>
               <span class="sub">ドット絵に変換</span>
+            </button>
+            <button class="choice" id="startResumeBtn" style="display:none;">
+              <svg width="30" height="30" viewBox="0 0 12 12" shape-rendering="crispEdges" fill="#a78bd9">
+                <rect x="0" y="2" width="5" height="1"/><rect x="0" y="3" width="12" height="8"/>
+                <rect x="1" y="1" width="3" height="1"/>
+              </svg>
+              <span>続きから</span>
+              <span class="sub">前に描いた作品</span>
             </button>
           </div>
         </div>
@@ -1244,6 +1277,30 @@
   </div>
 
 
+  <!-- 作品の板。柱の中に置くと段階によって消えるので、そのほかと同じ扱い。 -->
+  <section class="pane" id="paneWorks" data-pane="works">
+    <button class="pane-close" data-close aria-label="閉じる">×</button>
+    <div class="pane-title">作品</div>
+    <div id="worksList" class="works-list"></div>
+    <div class="section stack" style="margin-top:12px;">
+      <button id="workNewBtn">新しく作る</button>
+      <button id="workDupBtn">今の作品を複製</button>
+    </div>
+    <details class="fold">
+      <summary>ファイルでやりとり</summary>
+      <div class="section stack" style="margin-top:6px;">
+        <button id="workExportBtn">この作品をファイルに書き出す</button>
+        <button id="workImportBtn">ファイルから読み込む</button>
+        <input type="file" id="workImportInput" accept="application/json,.json" hidden>
+      </div>
+      <div style="font-size:11px; color:var(--muted); line-height:1.7;">
+        ブラウザの中の保存は、閲覧データを消すと一緒に消えます。
+        iPhone は使わない期間が続くと勝手に捨てることもあります。
+        残しておきたい絵はファイルにも書き出しておいてください。
+      </div>
+    </details>
+  </section>
+
   <!-- 「そのほか」は柱の中に置かない。段階によって柱ごと消えるので、
        中に居ると設定に手が届かなくなる。 -->
   <section class="pane" id="paneMore" data-pane="more">
@@ -1264,7 +1321,8 @@
         1 枚の絵だけを描くなら要らない。
       </div>
     </div>
-    <button id="tipsBtn" style="width:100%; margin-top:14px;">ドット絵のコツ</button>
+    <button data-open="works" style="width:100%; margin-top:14px;">作品を切り替える</button>
+    <button id="tipsBtn" style="width:100%; margin-top:6px;">ドット絵のコツ</button>
     <button id="aboutBtn2" style="width:100%; margin-top:6px;">このアプリについて</button>
   </section>
 
@@ -4729,10 +4787,31 @@ el.previewCanvas.addEventListener('click', openPreviewModal);
 //       localStorage (5MB 前後) に収まり、読み書きも速い。
 // var なのは意図。renderEditor は初期化の途中でも scheduleSave を呼ぶので、
 // const/let だと「宣言前に触った」で落ちる。var なら未定義で素通りできる。
-var SAVE_KEY = 'pixelizer.work.v1';
+var LEGACY_KEY = 'pixelizer.work.v1';   // 1 枠しか無かった頃の保存先
+var WORKS_KEY  = 'pixelizer.works';     // 作品の目次 [{id,name,w,h,updated,thumb}]
+var CUR_KEY    = 'pixelizer.cur';       // 今開いている作品の id
 var SAVE_DELAY = 1200;
 var _saveTimer = null;
 var _restoring = false;
+
+function workKey(id) { return 'pixelizer.w.' + id; }
+function lsGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (_) { return false; } }
+function lsDel(k) { try { localStorage.removeItem(k); } catch (_) {} }
+
+function loadWorks() {
+  try {
+    const a = JSON.parse(lsGet(WORKS_KEY) || '[]');
+    return Array.isArray(a) ? a : [];
+  } catch (_) { return []; }
+}
+function storeWorks(list) { lsSet(WORKS_KEY, JSON.stringify(list)); }
+function currentWorkId() { return lsGet(CUR_KEY); }
+function setCurrentWorkId(id) { if (id) lsSet(CUR_KEY, id); else lsDel(CUR_KEY); }
+
+function newWorkId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
 
 const _celCanvas = document.createElement('canvas');
 function celToDataURL(buf) {
@@ -4759,56 +4838,95 @@ function dataURLToCel(url, W, H) {
   });
 }
 
+// 一覧に出す小さな絵。目次に入れるので、大きくすると目次ごと重くなる。
+function makeThumb() {
+  const W = state.width, H = state.height;
+  const box = 40;
+  const k = Math.max(1, Math.floor(Math.min(box / W, box / H))) || 1;
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.min(box, W * k));
+  c.height = Math.max(1, Math.min(box, H * k));
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const src = document.createElement('canvas');
+  src.width = W; src.height = H;
+  const sctx = src.getContext('2d');
+  const id = sctx.createImageData(W, H);
+  id.data.set(compositeFrame(state.currentFrame));
+  sctx.putImageData(id, 0, 0);
+  ctx.drawImage(src, 0, 0, c.width, c.height);
+  return c.toDataURL('image/png');
+}
+
+function workName() {
+  const n = (el.spriteName && el.spriteName.value || '').trim();
+  return n || '名前のない作品';
+}
+
+function makeWorkPayload() {
+  return {
+    v: 1,
+    w: state.width, h: state.height,
+    currentLayer: state.currentLayer,
+    currentFrame: state.currentFrame,
+    color: state.color,
+    palette: state.palette,
+    layers: state.layers.map(l => ({
+      name: l.name, opacity: l.opacity, visible: l.visible,
+      frames: l.frames.map(celToDataURL),
+    })),
+  };
+}
+
 function saveWorkNow() {
   if (!state.pixels || _restoring) return;
-  try {
-    const data = {
-      v: 1,
-      w: state.width, h: state.height,
-      currentLayer: state.currentLayer,
-      currentFrame: state.currentFrame,
-      color: state.color,
-      palette: state.palette,
-      layers: state.layers.map(l => ({
-        name: l.name, opacity: l.opacity, visible: l.visible,
-        frames: l.frames.map(celToDataURL),
-      })),
-    };
-    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
-  } catch (err) {
-    // 入り切らない (QuotaExceeded) 等。次の変化でまた試すので、ここでは黙る。
-    try { localStorage.removeItem(SAVE_KEY); } catch (_) {}
+  let id = currentWorkId();
+  if (!id) { id = newWorkId(); setCurrentWorkId(id); }
+  const payload = JSON.stringify(makeWorkPayload());
+  if (!lsSet(workKey(id), payload)) {
+    // 入り切らない (QuotaExceeded)。ここで目次まで壊すと他の作品を巻き添えにする。
+    toast('保存先がいっぱいです。要らない作品を消してください');
+    return;
   }
+  const list = loadWorks();
+  const row = { id, name: workName(), w: state.width, h: state.height,
+                updated: Date.now(), thumb: makeThumb() };
+  const i = list.findIndex(x => x.id === id);
+  if (i >= 0) list[i] = row; else list.unshift(row);
+  storeWorks(list);
+  renderWorksList();
 }
+
 function scheduleSave() {
-  if (!SAVE_KEY || _restoring) return;
+  if (_restoring) return;
   if (_saveTimer) clearTimeout(_saveTimer);
   _saveTimer = setTimeout(saveWorkNow, SAVE_DELAY);
 }
+
+// 今の作品の中身だけ捨てる。目次からは消さない（サイズ変更などで使う）。
 function clearSavedWork() {
-  if (!SAVE_KEY) return;
   if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
-  try { localStorage.removeItem(SAVE_KEY); } catch (_) {}
+  const id = currentWorkId();
+  if (!id) return;
+  // 中身だけ消すと「一覧に出るのに開けない行」が残る。行ごと畳む。
+  lsDel(workKey(id));
+  storeWorks(loadWorks().filter(x => x.id !== id));
+  setCurrentWorkId(null);
+  renderWorksList();
 }
+
 // 画面を離れる瞬間は待っていられないので、その場で書く。
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveWorkNow(); });
 window.addEventListener('pagehide', saveWorkNow);
 
-async function restoreWork() {
-  let raw;
-  try { raw = localStorage.getItem(SAVE_KEY); } catch (_) { return false; }
-  if (!raw) return false;
-  let data;
-  try { data = JSON.parse(raw); } catch (_) { clearSavedWork(); return false; }
-  if (!data || data.v !== 1 || !data.layers || !data.layers.length) { clearSavedWork(); return false; }
-
+async function applyWorkPayload(data) {
+  if (!data || data.v !== 1 || !data.layers || !data.layers.length) return false;
   _restoring = true;
   try {
     state.width = data.w; state.height = data.h;
     el.sizeLabel.textContent = state.width;
     el.sizeLabel2.textContent = state.height;
-    el.sizeButtons.forEach(b => b.classList.toggle('active',
-      +b.dataset.w === state.width && +b.dataset.h === state.height));
+    syncSizeButtons();
     syncSizeFold();
 
     state.layers = [];
@@ -4832,17 +4950,232 @@ async function restoreWork() {
     renderEditor();
   } catch (err) {
     _restoring = false;
-    clearSavedWork();
     return false;
   }
   _restoring = false;
-  // コマが 2 つ以上ある絵を復元したのにコマ送りが切られていると、
+  // コマが 2 つ以上ある絵を開いたのにコマ送りが切られていると、
   // 描いたものが見えないまま取り残される。そのときだけ勝手に入れる。
   if (frameCount() > 1) applyAnimEnabled(true);
   setPhase('draw');
-  toast('前回の続きから開きました');
   return true;
 }
+
+async function openWork(id) {
+  if (state.pixels) saveWorkNow();      // 切り替える前に今の作品を確定させる
+  let data;
+  try { data = JSON.parse(lsGet(workKey(id)) || 'null'); } catch (_) { data = null; }
+  if (!data) { toast('その作品は開けませんでした'); return false; }
+  const row = loadWorks().find(x => x.id === id);
+  setCurrentWorkId(id);
+  if (row && el.spriteName) el.spriteName.value = row.name;
+  const ok = await applyWorkPayload(data);
+  if (ok) { renderWorksList(); toast('「' + (row ? row.name : '作品') + '」を開きました'); }
+  return ok;
+}
+
+function startNewWork() {
+  if (state.pixels) saveWorkNow();
+  setCurrentWorkId(null);
+  state.sourceImg = null;
+  state.grid = null;
+  state.pixels = null;
+  state.layers = [];
+  state.undoStack = []; state.redoStack = [];
+  state.palette = [];
+  if (el.spriteName) el.spriteName.value = 'sprite';
+  if (el.autoSizeNote) el.autoSizeNote.textContent = '';
+  appEl.classList.remove('has-image');
+  if (el.originalCanvas) el.originalCanvas.classList.remove('loaded');
+  el.convertBtn.disabled = true;
+  el.autoSizeBtn.disabled = true;
+  cancelSelection();
+  updateHistoryButtons();
+  renderPalette();
+  renderTimeline();
+  renderLayerPanel();
+  setPhase('empty');
+  renderWorksList();
+}
+
+function duplicateCurrentWork() {
+  if (!state.pixels) { toast('複製する作品がありません'); return; }
+  saveWorkNow();
+  const from = currentWorkId();
+  const id = newWorkId();
+  const payload = lsGet(workKey(from));
+  if (!payload || !lsSet(workKey(id), payload)) { toast('複製できませんでした'); return; }
+  const list = loadWorks();
+  const src = list.find(x => x.id === from);
+  list.unshift({ id, name: (src ? src.name : workName()) + ' のコピー',
+                 w: state.width, h: state.height, updated: Date.now(),
+                 thumb: src ? src.thumb : makeThumb() });
+  storeWorks(list);
+  setCurrentWorkId(id);
+  if (el.spriteName) el.spriteName.value = list[0].name;
+  renderWorksList();
+  toast('複製しました');
+}
+
+function deleteWork(id) {
+  const list = loadWorks();
+  const row = list.find(x => x.id === id);
+  if (!confirm('「' + (row ? row.name : 'この作品') + '」を消します。戻せません。よろしいですか？')) return;
+  lsDel(workKey(id));
+  storeWorks(list.filter(x => x.id !== id));
+  if (currentWorkId() === id) startNewWork();
+  else renderWorksList();
+}
+
+function renameWork(id) {
+  const list = loadWorks();
+  const row = list.find(x => x.id === id);
+  if (!row) return;
+  const next = prompt('作品の名前', row.name);
+  if (next === null) return;
+  row.name = next.trim() || row.name;
+  storeWorks(list);
+  if (currentWorkId() === id && el.spriteName) el.spriteName.value = row.name;
+  renderWorksList();
+}
+
+function renderWorksList() {
+  const box = document.getElementById('worksList');
+  if (!box) return;
+  const list = loadWorks().slice().sort((a, b) => (b.updated || 0) - (a.updated || 0));
+  const cur = currentWorkId();
+  box.innerHTML = '';
+  if (!list.length) {
+    const p = document.createElement('div');
+    p.className = 'works-empty';
+    p.textContent = 'まだ作品がありません。描き始めると自動でここに並びます。';
+    box.appendChild(p);
+  }
+  for (const row of list) {
+    const line = document.createElement('div');
+    line.className = 'work-row' + (row.id === cur ? ' current' : '');
+    const img = document.createElement('img');
+    img.className = 'work-thumb';
+    img.alt = '';
+    if (row.thumb) img.src = row.thumb;
+    const meta = document.createElement('div');
+    meta.className = 'work-meta';
+    const nm = document.createElement('div');
+    nm.className = 'work-name';
+    nm.textContent = row.name;
+    const sub = document.createElement('div');
+    sub.className = 'work-sub';
+    const d = row.updated ? new Date(row.updated) : null;
+    const pad = (n) => String(n).padStart(2, '0');
+    sub.textContent = row.w + '×' + row.h +
+      (d ? ' ／ ' + (d.getMonth() + 1) + '/' + d.getDate() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) : '');
+    meta.appendChild(nm); meta.appendChild(sub);
+    const del = document.createElement('button');
+    del.className = 'work-del';
+    del.textContent = '×';
+    del.title = 'この作品を消す';
+    del.addEventListener('click', (e) => { e.stopPropagation(); deleteWork(row.id); });
+    line.appendChild(img); line.appendChild(meta); line.appendChild(del);
+    line.addEventListener('click', () => {
+      if (row.id === cur) renameWork(row.id);
+      else { openWork(row.id); closePane(); }
+    });
+    box.appendChild(line);
+  }
+  const resume = document.getElementById('startResumeBtn');
+  if (resume) resume.style.display = list.length ? '' : 'none';
+}
+
+// ── ファイルでやりとり ──────────────────────────────
+// ブラウザの中の保存は、閲覧データを消せば一緒に消える。
+// 残しておきたい絵は手元のファイルにも出せるようにしておく。
+function exportWorkFile() {
+  if (!state.pixels) { toast('書き出す作品がありません'); return; }
+  saveWorkNow();
+  const data = makeWorkPayload();
+  data.name = workName();
+  data.app = 'pixelizer';
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  saveBlob(blob, safeFolderName(workName()) + '.pixelizer.json');
+}
+
+async function importWorkFile(file) {
+  let data;
+  try { data = JSON.parse(await file.text()); } catch (_) { toast('読み込めないファイルです'); return; }
+  if (!data || data.v !== 1 || !Array.isArray(data.layers) || !data.layers.length) {
+    toast('この形式には対応していません'); return;
+  }
+  if (state.pixels) saveWorkNow();
+  const id = newWorkId();
+  if (!lsSet(workKey(id), JSON.stringify(data))) { toast('保存先がいっぱいです'); return; }
+  const fallback = file.name.replace(/\.pixelizer\.json$/i, '').replace(/\.json$/i, '');
+  const name = data.name || fallback || '読み込んだ作品';
+  const list = loadWorks();
+  list.unshift({ id, name: name, w: data.w, h: data.h, updated: Date.now(), thumb: null });
+  storeWorks(list);
+  setCurrentWorkId(id);
+  if (el.spriteName) el.spriteName.value = name;
+  if (await applyWorkPayload(data)) { saveWorkNow(); closePane(); toast('「' + name + '」を読み込みました'); }
+}
+
+document.getElementById('workNewBtn').addEventListener('click', () => { startNewWork(); closePane(); });
+document.getElementById('workDupBtn').addEventListener('click', duplicateCurrentWork);
+document.getElementById('workExportBtn').addEventListener('click', exportWorkFile);
+document.getElementById('workImportBtn').addEventListener('click', () => document.getElementById('workImportInput').click());
+document.getElementById('workImportInput').addEventListener('change', (e) => {
+  const f = e.target.files && e.target.files[0];
+  if (f) importWorkFile(f);
+  e.target.value = '';
+});
+// 名前欄は作品の名前そのもの。打ち替えたら目次にも反映する。
+if (el.spriteName) el.spriteName.addEventListener('input', () => {
+  const id = currentWorkId();
+  if (!id) return;
+  const list = loadWorks();
+  const row = list.find(x => x.id === id);
+  if (!row) return;
+  row.name = workName();
+  storeWorks(list);
+  renderWorksList();
+});
+
+// 1 枠しか無かった頃の保存を、作品 1 つとして引き継ぐ。
+function migrateLegacy() {
+  const raw = lsGet(LEGACY_KEY);
+  if (!raw) return;
+  if (loadWorks().length) { lsDel(LEGACY_KEY); return; }
+  const id = newWorkId();
+  if (lsSet(workKey(id), raw)) {
+    let w = 32, h = 32;
+    try { const d = JSON.parse(raw); w = d.w || w; h = d.h || h; } catch (_) {}
+    storeWorks([{ id, name: '前回の作品', w: w, h: h, updated: Date.now(), thumb: null }]);
+    setCurrentWorkId(id);
+  }
+  lsDel(LEGACY_KEY);
+}
+
+async function restoreWork() {
+  migrateLegacy();
+  renderWorksList();
+  const id = currentWorkId();
+  if (!id) return false;
+  let data;
+  try { data = JSON.parse(lsGet(workKey(id)) || 'null'); } catch (_) { data = null; }
+  if (!data) return false;
+  const row = loadWorks().find(x => x.id === id);
+  if (row && el.spriteName) el.spriteName.value = row.name;
+  const ok = await applyWorkPayload(data);
+  if (ok) toast('前回の続きから開きました');
+  return ok;
+}
+
+// ブラウザに「このデータは捨てないで」と頼む。断られても動きは変わらない。
+if (navigator.storage && navigator.storage.persist) {
+  navigator.storage.persisted()
+    .then(ok => { if (!ok) navigator.storage.persist().catch(() => {}); })
+    .catch(() => {});
+}
+
+document.getElementById('startResumeBtn').addEventListener('click', () => showPane('works'));
 
 restoreWork();
 
@@ -4878,7 +5211,7 @@ function closePane() {
 function showPane(name) {
   // 「そのほか」だけは広い画面でも板として浮かせる。
   // ほかの板は列に常設なので、広い画面では開く相手がいない。
-  if (!isSheetMode() && name !== 'more') return;
+  if (!isSheetMode() && name !== 'more' && name !== 'works') return;
   if (openPane === name) { closePane(); return; }
   closePane();
   const p = panes[name];
